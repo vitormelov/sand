@@ -1,0 +1,141 @@
+{
+ "type": "FeatureCollection",
+ "metadata": {
+  "generated": 1792789750000,
+  "url": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson",
+  "title": "USGS Magnitude 4.5+ Earthquakes, Past Day",
+  "status": 200,
+  "api": "2.8.2",
+  "count": 17
+ },
+ "features": [
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 4.8,
+    "place": "209 km ENE of Nagqu, China",
+    "time": 1792787861989,
+    "updated": 1792789578040,
+    "tz": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000u4gj",
+    "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000u4gj.geojson",
+    "felt": null,
+    "cdi": null,
+    "mmi": null,
+    "alert": null,
+    "status": "reviewed",
+    "tsunami": 0,
+    "sig": 354,
+    "net": "us",
+    "code": "6000u4gj",
+    "ids": ",us6000u4gj,",
+    "sources": ",us,",
+    "types": ",origin,phase-data,",
+    "nst": 137,
+    "dmin": 8.793,
+    "rms": 0.48,
+    "gap": 44,
+    "magType": "mb",
+    "type": "earthquake",
+    "title": "M 4.8 - 209 km ENE of Nagqu, China"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     93.943,
+     32.4693,
+     10
+    ]
+   },
+   "id": "us6000u4gj"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 4.6,
+    "place": "91 km ESE of Tuensang, India",
+    "time": 1792775185116,
+    "updated": 1792776626040,
+    "tz": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000u4f5",
+    "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000u4f5.geojson",
+    "felt": null,
+    "cdi": null,
+    "mmi": null,
+    "alert": null,
+    "status": "reviewed",
+    "tsunami": 0,
+    "sig": 326,
+    "net": "us",
+    "code": "6000u4f5",
+    "ids": ",us6000u4f5,",
+    "sources": ",us,",
+    "types": ",origin,phase-data,",
+    "nst": 66,
+    "dmin": 4.75,
+    "rms": 0.54,
+    "gap": 87,
+    "magType": "mb",
+    "type": "earthquake",
+    "title": "M 4.6 - 91 km ESE of Tuensang, India"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     95.6545,
+     25.9295,
+     116.703
+    ]
+   },
+   "id": "us6000u4f5"
+  },
+  {
+   "type": "Feature",
+   "properties": {
+    "mag": 5.1,
+    "place": "72 km ENE of Noda, Japan",
+    "time": 1792771671754,
+    "updated": 1792773309026,
+    "tz": null,
+    "url": "https://earthquake.usgs.gov/earthquakes/eventpage/us6000u4e2",
+    "detail": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/detail/us6000u4e2.geojson",
+    "felt": 1,
+    "cdi": 2.2,
+    "mmi": null,
+    "alert": null,
+    "status": "reviewed",
+    "tsunami": 0,
+    "sig": 400,
+    "net": "us",
+    "code": "6000u4e2",
+    "ids": ",us6000u4e2,",
+    "sources": ",us,",
+    "types": ",dyfi,origin,phase-data,",
+    "nst": 74,
+    "dmin": 1.207,
+    "rms": 0.67,
+    "gap": 100,
+    "magType": "mb",
+    "type": "earthquake",
+    "title": "M 5.1 - 72 km ENE of Noda, Japan"
+   },
+   "geometry": {
+    "type": "Point",
+    "coordinates": [
+     142.572,
+     40.4159,
+     38.138
+    ]
+   },
+   "id": "us6000u4e2"
+  }
+ ],
+ "bbox": [
+  -178.9021,
+  -24.286,
+  10,
+  154.9209,
+  48.3802,
+  591.289
+ ]
+}
