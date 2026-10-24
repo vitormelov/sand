@@ -34,6 +34,8 @@ export interface Particle {
   supportL: boolean;
   supportR: boolean;
   supportUnder: boolean;
+  /** Another grain presses on it from above (buried). */
+  supportAbove: boolean;
   /** Spatial-grid bookkeeping. */
   cellKey: number;
 }
@@ -74,6 +76,7 @@ export function createParticle(init: {
     supportL: false,
     supportR: false,
     supportUnder: false,
+    supportAbove: false,
     cellKey: Number.NaN,
   };
 }

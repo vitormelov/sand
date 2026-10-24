@@ -22,6 +22,7 @@ export interface Prefs {
   ambient: boolean;
   sound: boolean;
   criticalAlerts: boolean;
+  showMap: boolean;
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -38,6 +39,7 @@ export const DEFAULT_PREFS: Prefs = {
   ambient: true,
   sound: false,
   criticalAlerts: true,
+  showMap: true,
 };
 
 const KEY = 'sand:prefs:v1';
@@ -79,6 +81,7 @@ export function sanitizePrefs(raw: unknown): Prefs {
     ambient: typeof r.ambient === 'boolean' ? r.ambient : true,
     sound: r.sound === true,
     criticalAlerts: typeof r.criticalAlerts === 'boolean' ? r.criticalAlerts : true,
+    showMap: typeof r.showMap === 'boolean' ? r.showMap : true,
   };
 }
 

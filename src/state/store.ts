@@ -1,11 +1,12 @@
 import { useSyncExternalStore } from 'react';
+import { IMPACT_BANDS } from '../../shared/impact/config';
 import { computeImpact, type ImpactResult } from '../../shared/impact/engine';
 import type { NewsEvent, StreamEventMessage, StreamStatus, UserProfile } from '../../shared/types';
 
 export type Connection = 'connecting' | 'open' | 'reconnecting' | 'offline';
 
 export interface SpawnSink {
-  enqueue(req: { eventId: string; developmentId?: string; impact: number; critical: boolean }, backlog?: boolean): void;
+  enqueue(req: { eventId: string; developmentId?: string; impact: number; critical: boolean; x?: number }, backlog?: boolean): void;
   updateImpact(eventId: string, impact: number, critical: boolean): void;
   forgetEvent(eventId: string): void;
 }
@@ -136,6 +137,31 @@ export class SandStore {
       this.set({ sessionCount: this.state.sessionCount + 1, lastReceivedAt: now });
       return;
     }
+    this.set({});
+  }
+
+  /**
+   * Lab only: add a fictitious (demo) event. With `forcedScore` the engine's
+   * estimate is replaced, and the panel says so explicitly.
+   */
+  injectLab(e: NewsEvent, opts: { forcedScore?: number; x?: number } = {}): ImpactResult {
+    this.events.set(e.id, e);
+    let r = this.score(e);
+    if (opts.forcedScore != null) {
+      const score = Math.round(Math.min(100, Math.max(0, opts.forcedScore)));
+      const band = IMPACT_BANDS.find((b) => score < b.max) ?? IMPACT_BANDS[IMPACT_BANDS.length - 1];
+      r = { ...r, score, band: band.id, bandLabel: band.label, rules: [...r.rules, `valor forçado no laboratório (motor calculou ${r.score})`] };
+      this.impacts.set(e.id, r);
+    }
+    this.spawn({ eventId: e.id, impact: r.score, critical: isCritical(r), x: opts.x }, true);
+    this.set({ lastReceivedAt: new Date().toISOString() });
+    return r;
+  }
+
+  /** Lab only: forget every event. */
+  clearAll(): void {
+    this.events.clear();
+    this.impacts.clear();
     this.set({});
   }
 

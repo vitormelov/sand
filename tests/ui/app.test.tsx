@@ -77,6 +77,22 @@ describe('App', () => {
     expect(FakeEventSource.instances).toHaveLength(0);
   });
 
+  it('lab mode: fictitious, labelled, offline from the real stream; scenarios use the real engine', async () => {
+    render(<App lab />);
+    expect(screen.getByText('LAB — dados fictícios')).toBeInTheDocument();
+    expect(FakeEventSource.instances).toHaveLength(0);
+    await userEvent.click(screen.getByRole('button', { name: 'Emergência na sua cidade' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cultura no exterior' }));
+    const rows = [...document.querySelectorAll('.lab__log li')].map((li) => li.textContent ?? '');
+    const scoreOf = (label: string) => Number(rows.find((r) => r.startsWith(label))!.slice(label.length).match(/\d+/)![0]);
+    expect(scoreOf('Emergência na sua cidade')).toBeGreaterThanOrEqual(80);
+    expect(scoreOf('Cultura no exterior')).toBeLessThan(30);
+    await userEvent.click(screen.getByRole('button', { name: 'Notícias recentes' }));
+    // Once in the recent list, once in the critical-alert line (the emergency rule fired).
+    expect(await screen.findAllByRole('button', { name: /\[LAB\] Enchente atinge bairros/ })).toHaveLength(2);
+    expect(document.querySelector('.critical')).toHaveTextContent('[LAB] Enchente atinge bairros');
+  });
+
   it('respects the reduced-motion preference in settings', async () => {
     render(<App demo={false} />);
     await userEvent.click(screen.getByRole('button', { name: 'Configurações' }));

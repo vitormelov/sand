@@ -117,10 +117,13 @@ export type ImpactBand = (typeof IMPACT_BANDS)[number]['id'];
  * Large grains are deliberately rare: the curve stays flat until ~60.
  */
 export const RADIUS_CURVE: [score: number, radius: number][] = [
-  [0, 1.2],
-  [20, 1.8],
-  [40, 2.5],
-  [60, 3.5],
-  [80, 5.5],
-  [100, 9],
+  // Desktop-first: even the least impactful grain is clearly visible and easy to click.
+  // (Phones render at 60% — see SandSimulation.)
+  // Wide spread so impact levels are told apart at a glance.
+  [0, 7],
+  [20, 10],
+  [40, 14],
+  [60, 20],
+  [80, 30],
+  [100, 50],
 ];

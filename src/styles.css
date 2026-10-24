@@ -101,6 +101,12 @@ button {
   color: var(--ink-2);
   user-select: none;
 }
+.brand--clock {
+  margin-left: -4px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2em;
+}
 
 .demo-badge {
   position: absolute;
@@ -175,6 +181,8 @@ button {
   color: var(--ink-4);
   pointer-events: none;
   font-variant-numeric: tabular-nums;
+  /* Stays legible when the sand bed rises behind it. */
+  text-shadow: 0 0 3px #fff, 0 0 6px #fff;
 }
 .statusbar__conn {
   margin-left: auto;
@@ -553,11 +561,43 @@ button {
   font-size: 13px;
   overscroll-behavior: contain;
 }
-.details--sheet {
-  left: max(10px, env(safe-area-inset-left));
-  right: max(10px, env(safe-area-inset-right));
-  bottom: max(10px, env(safe-area-inset-bottom));
-  max-height: 72vh;
+/* One fixed central slot shared by the hover preview and the pinned panel:
+   always fully on screen, wherever the grain is. */
+.details--full,
+.details--preview {
+  left: 50%;
+  top: 64px;
+  transform: translateX(-50%);
+  width: min(380px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px - 48px);
+}
+.details--preview {
+  pointer-events: none;
+  padding: 10px 14px 11px;
+}
+.details--preview .details__title {
+  margin: 2px 0 4px;
+  font-size: 14px;
+}
+.details__hint {
+  font-size: 11px;
+  color: var(--ink-4);
+}
+
+.leader {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+.leader line {
+  stroke: rgba(17, 17, 17, 0.32);
+  stroke-width: 1;
+}
+.leader circle {
+  fill: rgba(17, 17, 17, 0.45);
 }
 .details__head {
   display: flex;
@@ -755,6 +795,15 @@ button {
 }
 
 @media (max-width: 640px) {
+  .details--full {
+    top: auto;
+    left: max(10px, env(safe-area-inset-left));
+    right: max(10px, env(safe-area-inset-right));
+    bottom: max(10px, env(safe-area-inset-bottom));
+    width: auto;
+    transform: none;
+    max-height: 72vh;
+  }
   .statusbar span:not(.statusbar__conn):nth-child(2) {
     display: none;
   }
@@ -783,4 +832,152 @@ button {
   .toggle input::after {
     transition: none;
   }
+}
+
+/* ---------------------------------------------------------- lab (/?lab) */
+
+.lab {
+  position: absolute;
+  top: 56px;
+  left: max(12px, env(safe-area-inset-left));
+  width: min(320px, calc(100vw - 24px));
+  max-height: calc(100vh - 110px);
+  overflow-y: auto;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px dashed var(--line-2);
+  border-radius: 10px;
+  padding: 12px 14px 14px;
+  font-size: 12.5px;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+}
+.lab section {
+  border-top: 1px solid var(--line);
+  padding: 10px 0 4px;
+}
+.lab h3 {
+  margin: 0 0 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.lab__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin-bottom: 8px;
+}
+.lab__head .link-btn {
+  margin-left: auto;
+  font-size: 12px;
+}
+.lab__warn {
+  font-size: 11px;
+  color: var(--off);
+}
+.lab-ruler {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 8px 4px;
+  margin-bottom: 6px;
+}
+.lab-ruler__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+.lab-ruler__item {
+  min-width: 0;
+}
+.lab-ruler__item small {
+  font-size: 8px;
+  letter-spacing: -0.02em;
+  color: var(--ink-4);
+}
+.lab-ruler__dot {
+  display: block;
+  border-radius: 50%;
+  background: var(--ink);
+}
+.lab__bands {
+  font-size: 10.5px;
+  color: var(--ink-3);
+  margin: 4px 0 8px;
+}
+.lab .range {
+  grid-template-columns: 76px 1fr 32px;
+}
+.lab .chip {
+  font-size: 12px;
+  padding: 3px 9px;
+}
+.lab__log {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+}
+.lab__log li {
+  display: grid;
+  grid-template-columns: 1fr 26px 64px;
+  gap: 6px;
+  align-items: baseline;
+}
+.lab__log strong {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.lab__log small {
+  color: var(--ink-3);
+}
+.lab__stats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  margin: 8px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+.lab__stats dt {
+  font-size: 9.5px;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.lab__stats dd {
+  margin: 0;
+}
+.lab-toggle {
+  position: absolute;
+  top: 56px;
+  left: 12px;
+  border: 1px dashed var(--line-2);
+  background: #fff;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+
+/* -------------------------------------------------------- world map */
+
+.map-host {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.map-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }

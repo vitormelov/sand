@@ -2,7 +2,7 @@
 
 Notícias reais caem como areia. Cada grão é um acontecimento; o tamanho estima o **impacto potencial na vida de quem observa**, a partir da cidade que a pessoa informou.
 
-Fundo branco, grãos pretos, gravidade, colisões, acúmulo. Sem feed, sem manchetes fixas, sem alarmes. Clique num grão para ver a matéria original, por que ela tem aquele tamanho e com que confiança.
+Fundo branco com um mapa-múndi em traço fino, grãos pretos, gravidade, colisões, acúmulo como areia. Sem feed, sem manchetes fixas, sem alarmes. Clique num grão para ver a matéria original, por que ela tem aquele tamanho e com que confiança.
 
 ---
 
@@ -32,6 +32,8 @@ npm run build
 ```bash
 npm start
 ```
+
+Laboratório do desenvolvedor, com dados **fictícios** e o rótulo "LAB" sempre visível, sem conexão com as fontes reais: http://localhost:5173/?lab. Ele tem uma régua de tamanhos (0–100), grãos com impacto escolhido, cenários calculados pelo motor real com o seu perfil (de "notícia leve" a "emergência na sua cidade"), rajada/chuva contínua, pausar física, limpar areia e métricas (fps, grãos caindo/depositados, fila).
 
 Modo demonstração, com dados **fictícios** e o rótulo "DEMO — dados fictícios" sempre visível (não conecta às fontes reais): http://localhost:5173/?demo
 

@@ -18,6 +18,8 @@ export interface SpawnRequest {
   developmentId?: string;
   impact: number;
   critical: boolean;
+  /** Drop position as a fraction of the width (lab/testing); random when omitted. */
+  x?: number;
 }
 
 export interface SimStats {
@@ -29,7 +31,10 @@ export interface SimStats {
   bakes: number;
 }
 
-const DENSITY_STATICS = { low: 2500, normal: 5000, high: 9000 } as const;
+// Caps sized for desktop-scale grains (7–50 px); the bed-height limit usually binds first.
+const DENSITY_STATICS = { low: 800, normal: 1500, high: 3000 } as const;
+/** Grains are rendered smaller on phones so the landscape keeps its proportions. */
+const MOBILE_SIZE = 0.6;
 const DEVELOPMENT_SCALE = 0.62;
 const MAX_QUEUE = 600;
 
@@ -56,6 +61,7 @@ export class SandSimulation {
   private dpr = 1;
   private running = false;
   private pruneTimer = 5;
+  private paused = false;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -73,7 +79,9 @@ export class SandSimulation {
 
   private measure() {
     const rect = this.canvas.parentElement?.getBoundingClientRect() ?? { width: innerWidth, height: innerHeight };
-    this.dpr = Math.min(2, window.devicePixelRatio || 1);
+    // Supersample: never below 2× the CSS size, so circle edges come out smooth after the
+    // browser downscales (on a 1× monitor a 1:1 canvas looks stair-stepped).
+    this.dpr = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
     return { width: Math.max(1, Math.round(rect.width)), height: Math.max(1, Math.round(rect.height)) };
   }
 
@@ -85,16 +93,19 @@ export class SandSimulation {
     c.maxActive = mobile ? 200 : 400;
     c.maxPileFraction = mobile ? 0.34 : 0.4;
     c.ambientMotion = !this.settings.reducedMotion;
-    this.engine.setMaxRadius(scoreToRadius(100, this.settings.sizeScale));
+    this.engine.setMaxRadius(scoreToRadius(100, this.effectiveScale()));
   }
 
   setSettings(next: Partial<SimSettings>): void {
     const prevScale = this.settings.sizeScale;
     this.settings = { ...this.settings, ...next };
     this.applySettings();
-    if (next.sizeScale != null && next.sizeScale !== prevScale) {
-      for (const list of this.byEvent.values()) for (const p of list) p.targetR = this.radiusFor(p.impact, !!p.developmentId);
-    }
+    if (next.sizeScale != null && next.sizeScale !== prevScale) this.rescaleAll();
+  }
+
+  /** Grains ease to the size their impact implies at the current scale. */
+  private rescaleAll(): void {
+    for (const list of this.byEvent.values()) for (const p of list) p.targetR = this.radiusFor(p.impact, !!p.developmentId);
   }
 
   start(): void {
@@ -129,14 +140,20 @@ export class SandSimulation {
   private onResize(): void {
     const { width, height } = this.measure();
     if (width === this.engine.width && height === this.engine.height) return;
+    const wasScale = this.effectiveScale();
     this.engine.resize(width, height);
     this.renderer.resize(width, height, this.dpr);
     this.applySettings();
+    if (this.effectiveScale() !== wasScale) this.rescaleAll(); // crossed the phone/desktop threshold
+  }
+
+  private effectiveScale(): number {
+    return this.settings.sizeScale * (this.engine.width < 700 ? MOBILE_SIZE : 1);
   }
 
   private radiusFor(impact: number, development: boolean): number {
-    const r = scoreToRadius(impact, this.settings.sizeScale);
-    return development ? Math.max(1.2 * this.settings.sizeScale, r * DEVELOPMENT_SCALE) : r;
+    const r = scoreToRadius(impact, this.effectiveScale());
+    return development ? r * DEVELOPMENT_SCALE : r;
   }
 
   /** Queue a grain. Backlog grains (initial snapshot) are paced faster. */
@@ -195,6 +212,15 @@ export class SandSimulation {
     return p ? { x: p.x, y: p.y, r: p.r } : undefined;
   }
 
+  /** Live position of a specific grain (the one the user hovered or clicked). */
+  particlePosition(particleId: number): { x: number; y: number; r: number } | undefined {
+    for (const list of this.byEvent.values()) {
+      const p = list.find((x) => x.id === particleId);
+      if (p) return p.state === 'removed' ? undefined : { x: p.x, y: p.y, r: p.r };
+    }
+    return undefined;
+  }
+
   hitTest(x: number, y: number): Particle | undefined {
     return this.engine.hitTest(x, y);
   }
@@ -224,7 +250,12 @@ export class SandSimulation {
     // Mix uniform rain with a slowly wandering source: produces dunes rather than a flat bed.
     this.sourceDrift += 0.013;
     const wander = 0.5 + 0.42 * Math.sin(this.sourceDrift) * Math.cos(this.sourceDrift * 0.37);
-    const x = Math.random() < 0.55 ? wander * w + (Math.random() - 0.5) * w * 0.18 : Math.random() * w;
+    const x =
+      req.x != null
+        ? req.x * w
+        : Math.random() < 0.55
+          ? wander * w + (Math.random() - 0.5) * w * 0.18
+          : Math.random() * w;
     const p = createParticle({
       eventId: req.eventId,
       developmentId: req.developmentId,
@@ -234,7 +265,7 @@ export class SandSimulation {
       impact: req.impact,
       critical: req.critical && !req.developmentId,
       bornAt: this.engine.time,
-      vx: (Math.random() - 0.5) * 10,
+      vx: req.x != null ? 0 : (Math.random() - 0.5) * 10,
       vy: 20 + Math.random() * 20,
     });
     if (!this.byEvent.has(p.eventId)) this.byEvent.set(p.eventId, []);
@@ -255,6 +286,20 @@ export class SandSimulation {
     this.critical = this.critical.filter((p) => p.state !== 'removed');
   }
 
+  /** Freeze the physics (rendering continues so selection still works). */
+  setPaused(paused: boolean): void {
+    this.paused = paused;
+  }
+
+  /** Remove every grain and pending spawn (lab/testing). */
+  clear(): void {
+    this.queue = [];
+    this.spawned.clear();
+    this.byEvent.clear();
+    this.critical = [];
+    this.engine.clear();
+  }
+
   private frame = (now: number) => {
     if (!this.running) return;
     const raw = this.last == null ? 16 : now - this.last;
@@ -265,14 +310,14 @@ export class SandSimulation {
 
     // Spawn pacing: calm for live news, brisker while the backlog settles.
     this.spawnTimer -= dt * 1000;
-    if (this.spawnTimer <= 0 && this.queue.length && this.engine.canAcceptActive()) {
+    if (!this.paused && this.spawnTimer <= 0 && this.queue.length && this.engine.canAcceptActive()) {
       this.spawnNext();
       const backlog = this.queue[0]?.backlog;
       const base = backlog ? 140 : 1600;
       this.spawnTimer = Math.max(backlog ? 40 : 90, base / (1 + this.queue.length / (backlog ? 30 : 8))) * (0.7 + Math.random() * 0.6);
     }
 
-    this.engine.step(simDt);
+    if (!this.paused) this.engine.step(simDt);
     this.pruneTimer -= dt;
     if (this.pruneTimer <= 0) this.prune();
     this.renderer.render(this.engine, {

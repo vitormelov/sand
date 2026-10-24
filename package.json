@@ -26,7 +26,9 @@
     "fast-xml-parser": "^5.11.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "topojson-client": "^3.1.0",
     "tsx": "^4.23.15",
+    "world-atlas": "^2.0.2",
     "zod": "^4.6.7"
   },
   "devDependencies": {
@@ -36,6 +38,7 @@
     "@types/node": "^26.6.5",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
+    "@types/topojson-client": "^3.1.5",
     "@vitejs/plugin-react": "^6.1.2",
     "concurrently": "^10.0.6",
     "jsdom": "^29.1.1",

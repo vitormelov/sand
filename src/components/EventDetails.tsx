@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { categoryLabel, confidenceLabel, type ImpactResult } from '../../shared/impact/engine';
 import type { NewsEvent, RelationKind } from '../../shared/types';
 import { safeExternalUrl } from '../services/api';
@@ -9,7 +9,6 @@ import { IconClose, IconExternal } from './icons';
 interface Props {
   event: NewsEvent;
   impact: ImpactResult;
-  anchor?: { x: number; y: number; r: number };
   feedback?: FeedbackValue;
   relatedTitle: (id: string) => string | undefined;
   onFeedback: (v: FeedbackValue) => void;
@@ -30,32 +29,29 @@ const VERIFICATION_LABEL = {
   single_source: 'uma fonte',
 } as const;
 
-const PANEL_W = 340;
+/** Hover preview: source and headline only. Shares the fixed central slot with the full panel. */
+export function EventPreview({ event, impact }: { event: NewsEvent; impact?: ImpactResult }) {
+  return (
+    <div className="details details--preview" aria-hidden="true">
+      <span className="details__source">
+        {event.sourceName}
+        {impact ? ` · impacto ${impact.score}` : ''}
+        {event.demo ? ' · DEMO (fictício)' : ''}
+      </span>
+      <p className="details__title">{event.title}</p>
+      <span className="details__hint">clique no grão para abrir</span>
+    </div>
+  );
+}
 
 /**
- * Discreet panel next to the clicked grain (bottom sheet on narrow screens).
+ * Pinned panel in a fixed central slot, always fully on screen (bottom sheet on
+ * narrow screens). A thin leader line connects it to its grain.
  * All text from sources is rendered as plain text — never as HTML.
  */
-export function EventDetails({ event, impact, anchor, feedback, relatedTitle, onFeedback, onClose, onOpenRelated }: Props) {
-  const ref = useRef<HTMLDivElement>(null);
+export function EventDetails({ event, impact, feedback, relatedTitle, onFeedback, onClose, onOpenRelated }: Props) {
   const titleRef = useRef<HTMLHeadingElement>(null);
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   const [showFactors, setShowFactors] = useState(false);
-
-  useLayoutEffect(() => {
-    if (!ref.current) return;
-    if (window.innerWidth < 640 || !anchor) {
-      setPos(null);
-      return;
-    }
-    const h = ref.current.offsetHeight;
-    const gap = 18 + anchor.r;
-    let left = anchor.x + gap;
-    if (left + PANEL_W > window.innerWidth - 16) left = anchor.x - gap - PANEL_W;
-    left = Math.max(16, Math.min(left, window.innerWidth - PANEL_W - 16));
-    const top = Math.max(56, Math.min(anchor.y - h / 2, window.innerHeight - h - 40));
-    setPos({ left, top });
-  }, [anchor, event.id, showFactors]);
 
   useEffect(() => {
     titleRef.current?.focus();
@@ -70,13 +66,10 @@ export function EventDetails({ event, impact, anchor, feedback, relatedTitle, on
   const url = safeExternalUrl(event.url);
   const place = event.analysis.locations[0];
   const placeText = place ? place.name : 'local não identificado';
-  const sheet = pos == null;
 
   return (
     <aside
-      ref={ref}
-      className={`details ${sheet ? 'details--sheet' : ''}`}
-      style={pos ? { left: pos.left, top: pos.top, width: PANEL_W } : undefined}
+      className="details details--full"
       role="dialog"
       aria-modal="false"
       aria-labelledby="details-title"

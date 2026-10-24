@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { scoreToRadius } from '../../shared/impact/radius';
+import { makeRadiusFn, scoreToRadius as productionRadius } from '../../shared/impact/radius';
+
+// The engine is size-agnostic. Most tests use a fine-grained curve in a small box so piles form
+// quickly; one test below runs at the production sizes.
+const scoreToRadius = makeRadiusFn([
+  [0, 1.2],
+  [20, 1.8],
+  [40, 2.5],
+  [60, 3.5],
+  [80, 5.5],
+  [100, 9],
+]);
 import { createParticle, type Particle } from '../../src/simulation/Particle';
 import { DEFAULT_PHYSICS, PhysicsEngine } from '../../src/simulation/PhysicsEngine';
 
@@ -106,7 +117,7 @@ describe('physics engine', () => {
       woke = Math.max(woke, e.actives.length - (e.statics.has(big) ? 0 : 1));
     }
     expect(woke).toBeGreaterThan(0);
-    run(e, 32); // every grain is guaranteed to rest within MAX_ACTIVE_AGE (30 s)
+    run(e, 50); // every grain rests within 30 s, or 45 s if wedged/pinned by neighbours
     expect(before).toBeGreaterThan(150);
     expect(e.actives).toHaveLength(0);
     expect(e.staticCount).toBe(201); // everything settles again, nothing lost
@@ -137,6 +148,7 @@ describe('physics engine', () => {
     const p = grain(e, 100, H - 2, 0, 'tiny');
     run(e, 3);
     expect(e.hitTest(p.x + 5, p.y)?.eventId).toBe('tiny');
+    expect(e.hitTest(p.x + p.r + 10, p.y)?.eventId).toBe('tiny'); // forgiving target
     expect(e.hitTest(p.x + 40, p.y)).toBeUndefined();
   });
 
@@ -162,4 +174,48 @@ describe('physics engine', () => {
     expect(e.staticCount).toBeLessThanOrEqual(600 * 1.25);
     expect(e.actives.length).toBeLessThan(100);
   }, 60_000);
+
+  it('works at production grain sizes (7–50 px) on a desktop-sized box', () => {
+    const e = new PhysicsEngine(1280, 800, { ...DEFAULT_PHYSICS, maxStatic: 1500 });
+    e.setMaxRadius(productionRadius(100));
+    for (let i = 0; i < 400; i++) {
+      const s = Math.random() * 100;
+      e.add(createParticle({ eventId: 'p' + i, x: 40 + Math.random() * 1200, y: -i * 6, r: productionRadius(s), impact: s, critical: false, bornAt: 0 }));
+    }
+    for (let i = 0; i < 60 * 60; i++) e.step(dt);
+    expect(e.actives.length).toBeLessThan(10);
+    expect(e.bedHeightPx).toBeLessThanOrEqual(800 * 0.45);
+    for (const p of e.statics) {
+      expect(p.x).toBeGreaterThanOrEqual(p.r - 0.5);
+      expect(p.x).toBeLessThanOrEqual(1280 - p.r + 0.5);
+    }
+  }, 60_000);
+
+  it('sand does not stack into towers: a grain dropped dead-centre on another rolls off', () => {
+    const e = new PhysicsEngine(800, 400, { ...DEFAULT_PHYSICS, ambientMotion: false });
+    e.setMaxRadius(productionRadius(100));
+    const r = productionRadius(50);
+    const base = createParticle({ eventId: 'a', x: 400, y: 400 - r, r, impact: 50, critical: false, bornAt: 0 });
+    e.add(base);
+    for (let i = 0; i < 120; i++) e.step(dt);
+    const top = createParticle({ eventId: 'b', x: 400, y: -r, r, impact: 50, critical: false, bornAt: e.time });
+    e.add(top);
+    for (let i = 0; i < 60 * 40; i++) e.step(dt);
+    expect(e.actives).toHaveLength(0);
+    expect(top.y + top.r).toBeCloseTo(400, 0); // ended on the floor, beside the other grain
+  });
+
+  it('a column of grains dropped at the same spot spreads into a mound, not a tower', () => {
+    const e = new PhysicsEngine(800, 600, { ...DEFAULT_PHYSICS, ambientMotion: false });
+    e.setMaxRadius(productionRadius(100));
+    const r = productionRadius(30);
+    for (let i = 0; i < 12; i++) e.add(createParticle({ eventId: 'c' + i, x: 400, y: -r - i * 70, r, impact: 30, critical: false, bornAt: 0 }));
+    for (let i = 0; i < 60 * 60; i++) e.step(dt);
+    const all = [...e.statics];
+    expect(all).toHaveLength(12);
+    const height = 600 - Math.min(...all.map((p) => p.y - p.r));
+    const width = Math.max(...all.map((p) => p.x + p.r)) - Math.min(...all.map((p) => p.x - p.r));
+    expect(width).toBeGreaterThan(height * 1.5); // a mound, never a column
+    expect(height).toBeLessThan(r * 2 * 4); // at most ~4 grains high
+  });
 });

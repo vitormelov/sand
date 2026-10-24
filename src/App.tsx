@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { INTEREST } from '../shared/impact/config';
 import type { Category, UserProfile } from '../shared/types';
-import { EventDetails } from './components/EventDetails';
+import { Clock } from './components/Clock';
+import { EventDetails, EventPreview } from './components/EventDetails';
+import { LabPanel } from './components/LabPanel';
+import { LeaderLine } from './components/LeaderLine';
 import { IconList, IconSettings } from './components/icons';
 import { Onboarding } from './components/Onboarding';
-import { ParticleCanvas } from './components/ParticleCanvas';
+import { ParticleCanvas, type GrainRef } from './components/ParticleCanvas';
+import { WorldMap } from './components/WorldMap';
 import { PrivacyDialog } from './components/PrivacyDialog';
 import { RecentList } from './components/RecentList';
 import { SettingsPanel } from './components/SettingsPanel';
@@ -36,13 +40,25 @@ function usePrefersReducedMotion(): boolean {
 
 type Panel = 'none' | 'settings' | 'recent';
 
-export function App({ demo = new URLSearchParams(window.location.search).has('demo') }: { demo?: boolean }) {
+const query = new URLSearchParams(window.location.search);
+
+export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab') }: { demo?: boolean; lab?: boolean }) {
+  // The lab is a fictitious-data mode too: the real stream is never connected there.
+  const demo = demoProp || lab;
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
   const [feedback, setFeedback] = useState(loadFeedback);
   const store = useMemo(() => new SandStore(profileOf(prefs), demo), []); // eslint-disable-line react-hooks/exhaustive-deps
   const ui = useStoreState(store);
   const simRef = useRef<SandSimulation | null>(null);
-  const [selected, setSelected] = useState<{ id: string; anchor?: { x: number; y: number; r: number } } | null>(null);
+  const [selected, setSelected] = useState<{ id: string; particleId?: number } | null>(null);
+  const [hovered, setHovered] = useState<GrainRef | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout>>();
+  // Leaving a grain hides the preview after a short grace period (no flicker between neighbours).
+  const onHover = useCallback((g: GrainRef | null) => {
+    clearTimeout(hoverTimer.current);
+    if (g) setHovered(g);
+    else hoverTimer.current = setTimeout(() => setHovered(null), 140);
+  }, []);
   const [panel, setPanel] = useState<Panel>('none');
   const [privacy, setPrivacy] = useState(false);
   const [idle, setIdle] = useState(false);
@@ -52,11 +68,12 @@ export function App({ demo = new URLSearchParams(window.location.search).has('de
 
   // Data source: the real stream, or an explicitly labelled DEMO generator.
   useEffect(() => {
+    if (lab) return;
     if (demo) return startDemo(store);
     const client = new StreamClient(store);
     client.start();
     return () => client.stop();
-  }, [store, demo]);
+  }, [store, demo, lab]);
 
   // Persist preferences; recompute impact when what it depends on changes.
   useEffect(() => savePrefs(prefs), [prefs]);
@@ -89,7 +106,7 @@ export function App({ demo = new URLSearchParams(window.location.search).has('de
       evs.forEach((e) => window.removeEventListener(e, wake));
     };
   }, []);
-  const chromeHidden = prefs.ambient && idle && panel === 'none' && !selected && !privacy;
+  const chromeHidden = prefs.ambient && idle && panel === 'none' && !selected && !hovered && !privacy;
 
   const simSettings: SimSettings = useMemo(
     () => ({ gravity: prefs.gravity, speed: prefs.speed, sizeScale: prefs.sizeScale, density: prefs.density, reducedMotion, sound: prefs.sound }),
@@ -97,8 +114,7 @@ export function App({ demo = new URLSearchParams(window.location.search).has('de
   );
 
   const openEvent = useCallback((id: string) => {
-    const anchor = simRef.current?.grainPosition(id);
-    setSelected({ id, anchor });
+    setSelected({ id });
     if (window.innerWidth < 900) setPanel('none');
   }, []);
 
@@ -131,6 +147,7 @@ export function App({ demo = new URLSearchParams(window.location.search).has('de
   }, [prefs.affinity, store]);
 
   const selectedEvent = selected ? store.events.get(selected.id) : undefined;
+  const previewEvent = hovered ? store.events.get(hovered.eventId) : undefined;
   const selectedImpact = selected ? store.impacts.get(selected.id) : undefined;
   useEffect(() => {
     if (selected && !selectedEvent) setSelected(null); // expired while open
@@ -167,14 +184,16 @@ export function App({ demo = new URLSearchParams(window.location.search).has('de
 
   return (
     <main className={`app ${chromeHidden ? 'is-ambient' : ''}`}>
+      {prefs.showMap && <WorldMap />}
       <ParticleCanvas
         store={store}
         settings={simSettings}
         selectedEventId={selected?.id ?? null}
         simRef={simRef}
-        onSelect={(id, anchor) => {
-          if (id) {
-            setSelected({ id, anchor });
+        onHover={onHover}
+        onSelect={(g) => {
+          if (g) {
+            setSelected({ id: g.eventId, particleId: g.particleId });
             setPanel('none');
           } else {
             setSelected(null);
@@ -184,6 +203,7 @@ export function App({ demo = new URLSearchParams(window.location.search).has('de
 
       <header className="topbar chrome">
         <span className="brand">SAND</span>
+        <Clock />
         <nav className="topbar__actions" aria-label="Controles">
           <span className={`dot dot--${conn.tone}`} title={conn.label} aria-label={`Conexão: ${conn.label}`} role="img" />
           <button className="icon-btn" onClick={() => {
@@ -202,7 +222,8 @@ export function App({ demo = new URLSearchParams(window.location.search).has('de
       </header>
 
       {/* Always visible, even in ambient mode: fictitious data must never pass for real news. */}
-      {demo && <span className="demo-badge">DEMO — dados fictícios</span>}
+      {demo && <span className="demo-badge">{lab ? 'LAB' : 'DEMO'} — dados fictícios</span>}
+      {lab && <LabPanel store={store} simRef={simRef} sizeScale={prefs.sizeScale} />}
 
       {critical && (
         <div className="critical chrome-keep" role="status" aria-live="polite">
@@ -224,11 +245,20 @@ export function App({ demo = new URLSearchParams(window.location.search).has('de
         </div>
       )}
 
+      {!selectedEvent && previewEvent && panel === 'none' && (
+        <>
+          <EventPreview event={previewEvent} impact={store.impacts.get(previewEvent.id)} />
+          <LeaderLine simRef={simRef} eventId={previewEvent.id} particleId={hovered?.particleId} target=".details--preview" />
+        </>
+      )}
+
+      {selectedEvent && selectedImpact && (
+        <LeaderLine simRef={simRef} eventId={selectedEvent.id} particleId={selected?.particleId} target=".details--full" />
+      )}
       {selectedEvent && selectedImpact && (
         <EventDetails
           event={selectedEvent}
           impact={selectedImpact}
-          anchor={selected?.anchor}
           feedback={feedback[selectedEvent.id]}
           relatedTitle={(id) => store.events.get(id)?.title}
           onFeedback={(v) => onFeedback(selectedEvent.id, v)}

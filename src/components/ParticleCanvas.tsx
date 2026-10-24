@@ -2,11 +2,17 @@ import { useEffect, useRef } from 'react';
 import { SandSimulation, type SimSettings } from '../simulation/SandSimulation';
 import type { SandStore } from '../state/store';
 
+export interface GrainRef {
+  eventId: string;
+  particleId: number;
+}
+
 interface Props {
   store: SandStore;
   settings: SimSettings;
   selectedEventId: string | null;
-  onSelect: (eventId: string | null, anchor?: { x: number; y: number; r: number }) => void;
+  onSelect: (grain: GrainRef | null) => void;
+  onHover: (grain: GrainRef | null) => void;
   simRef?: React.MutableRefObject<SandSimulation | null>;
 }
 
@@ -14,9 +20,16 @@ interface Props {
  * Hosts the canvas. The simulation owns its animation loop; this component only
  * forwards settings, selection and pointer input — it does not re-render per frame.
  */
-export function ParticleCanvas({ store, settings, selectedEventId, onSelect, simRef }: Props) {
+export function ParticleCanvas({ store, settings, selectedEventId, onSelect, onHover, simRef }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sim = useRef<SandSimulation | null>(null);
+  const hovered = useRef<number | null>(null);
+  const setHover = (p: { id: number; eventId: string } | undefined) => {
+    const id = p?.eventId ? p.id : null;
+    if (id === hovered.current) return; // only notify React on change
+    hovered.current = id;
+    onHover(p?.eventId ? { eventId: p.eventId, particleId: p.id } : null);
+  };
 
   useEffect(() => {
     const s = new SandSimulation(canvasRef.current!, settings);
@@ -59,13 +72,16 @@ export function ParticleCanvas({ store, settings, selectedEventId, onSelect, sim
           const { x, y } = pos(e);
           const hit = sim.current?.hover(x, y);
           e.currentTarget.style.cursor = hit ? 'pointer' : 'default';
+          setHover(hit);
         }}
-        onPointerLeave={() => sim.current?.hover(null, null)}
+        onPointerLeave={() => {
+          sim.current?.hover(null, null);
+          setHover(undefined);
+        }}
         onClick={(e) => {
           const { x, y } = pos(e);
           const hit = sim.current?.hitTest(x, y);
-          if (hit?.eventId) onSelect(hit.eventId, { x: hit.x, y: hit.y, r: hit.r });
-          else onSelect(null);
+          onSelect(hit?.eventId ? { eventId: hit.eventId, particleId: hit.id } : null);
         }}
       />
     </div>

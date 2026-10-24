@@ -3,7 +3,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computeImpact } from '../../shared/impact/engine';
-import { EventDetails } from '../../src/components/EventDetails';
+import { Clock } from '../../src/components/Clock';
+import { EventDetails, EventPreview } from '../../src/components/EventDetails';
 import { SettingsPanel } from '../../src/components/SettingsPanel';
 import { connectionText } from '../../src/components/StatusBar';
 import { DEFAULT_PREFS } from '../../src/services/storage';
@@ -68,6 +69,22 @@ describe('EventDetails', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Ver fatores' }));
     expect(screen.getByText('Proximidade e exposição')).toBeInTheDocument();
     expect(screen.getByText('Consequência prática')).toBeInTheDocument();
+  });
+});
+
+describe('hover preview and clock', () => {
+  it('the preview shows source and headline only, and does not capture the pointer', () => {
+    const ev = event({ title: 'Manchete em pré-visualização', sourceName: 'BBC News Brasil' });
+    const { container } = render(<EventPreview event={ev} impact={computeImpact(ev, FORTALEZA)} />);
+    expect(screen.getByText('Manchete em pré-visualização')).toBeInTheDocument();
+    expect(screen.getByText(/BBC News Brasil · impacto \d+/)).toBeInTheDocument();
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(container.querySelector('.details--preview')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('the clock shows the current local time (HH:MM)', () => {
+    render(<Clock />);
+    expect(screen.getByText(/^\d{2}:\d{2}$/)).toBeInTheDocument();
   });
 });
 

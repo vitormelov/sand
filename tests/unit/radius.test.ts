@@ -12,7 +12,7 @@ describe('score → radius', () => {
     for (let s = 0.5; s <= 100; s += 0.5) {
       const r = scoreToRadius(s);
       expect(r).toBeGreaterThanOrEqual(prev);
-      expect(r - prev).toBeLessThan(0.15);
+      expect(r - prev).toBeLessThan(0.6);
       prev = r;
     }
   });
@@ -20,12 +20,12 @@ describe('score → radius', () => {
   it('clamps out-of-range scores and keeps extremes elegant', () => {
     expect(scoreToRadius(-50)).toBe(scoreToRadius(0));
     expect(scoreToRadius(500)).toBe(scoreToRadius(100));
-    expect(scoreToRadius(100)).toBeLessThanOrEqual(9);
-    expect(scoreToRadius(0)).toBeGreaterThanOrEqual(1.2);
+    expect(scoreToRadius(100)).toBeLessThanOrEqual(50);
+    expect(scoreToRadius(0)).toBeGreaterThanOrEqual(7);
   });
 
-  it('is non-linear: large grains are rare (half the range below 3.5 px)', () => {
-    expect(scoreToRadius(60)).toBeLessThanOrEqual(3.5);
+  it('is non-linear: large grains are rare (most of the range stays small)', () => {
+    expect(scoreToRadius(60)).toBeLessThanOrEqual(20);
     expect(scoreToRadius(90) - scoreToRadius(80)).toBeGreaterThan(scoreToRadius(30) - scoreToRadius(20));
   });
 

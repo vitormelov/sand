@@ -38,17 +38,23 @@ export const DEFAULT_PHYSICS: PhysicsConfig = {
 
 const BASE_G = 300; // px/s²
 const RESTITUTION = 0.05;
-const FRICTION = 0.14; // share of tangential velocity removed per contact
+const FRICTION = 0.06; // share of tangential velocity removed per contact (low: grains roll)
 const SLEEP_SPEED = 7; // px/s
 const SLEEP_TIME = 0.28; // s
 const MAX_ACTIVE_AGE = 30; // s
 const SUBSTEPS = 2;
 const ITERATIONS = 2;
-const WAKE_MIN_RADIUS = 3.4;
-const WAKE_MOMENTUM = 900; // mass(px²) × px/s
+/** A grain this many times larger than the one it hits can displace it (craters). */
+const WAKE_SIZE_RATIO = 2;
+const WAKE_MIN_SPEED = 60; // px/s
 const MAX_WAKE_PER_STEP = 40;
 const SINK_SPEED = 3; // px/s
 const SUPPORT_SLOP = 0.75;
+
+function classifyContact(nx: number, ny: number): { under: boolean; left: boolean; right: boolean; above: boolean } {
+  if (ny > 0.3) return { under: false, left: false, right: false, above: true }; // neighbour is above
+  return { under: ny < -0.35, left: nx > 0.15, right: nx < -0.15, above: false };
+}
 
 export class PhysicsEngine {
   actives: Particle[] = [];
@@ -69,7 +75,7 @@ export class PhysicsEngine {
   private accomTimer = 3;
   private bedTimer = 0;
   private bedHeight = 0;
-  private pendingWake: { q: Particle; x: number; y: number; speed: number }[] = [];
+  private pendingWake: { q: Particle; x: number; y: number; speed: number; r: number }[] = [];
 
   constructor(
     public width: number,
@@ -133,6 +139,7 @@ export class PhysicsEngine {
     this.settle(dt);
     this.processWakes();
     this.easeRadii(dt);
+    this.sweepStability(dt);
     this.compact(dt);
     if (this.config.ambientMotion) this.accommodate(dt);
   }
@@ -143,7 +150,8 @@ export class PhysicsEngine {
     const g = BASE_G * this.config.gravity;
     const flutter = this.config.ambientMotion;
     for (const p of this.actives) {
-      const vt = 55 + 20 * p.r; // terminal speed: light grains drift, heavy ones fall decisively
+      // Terminal speed follows impact, not pixel size: light news drifts, heavy news falls decisively.
+      const vt = 70 + 2.2 * p.impact;
       p.vy += g * h;
       const sp = Math.hypot(p.vx, p.vy);
       if (sp > 0) {
@@ -152,10 +160,10 @@ export class PhysicsEngine {
         p.vx -= p.vx * k;
         p.vy -= p.vy * k;
       }
-      if (flutter && p.r < 3) p.vx += Math.sin(this.time * 1.6 + p.phase) * (16 / p.r) * h;
+      if (flutter && p.impact < 40) p.vx += Math.sin(this.time * 1.6 + p.phase) * ((40 - p.impact) / 40) * 14 * h;
       p.x += p.vx * h;
       p.y += p.vy * h;
-      p.onFloor = p.supportL = p.supportR = p.supportUnder = false;
+      p.onFloor = p.supportL = p.supportR = p.supportUnder = p.supportAbove = false;
     }
     this.activeGrid.clear();
     for (const p of this.actives) this.activeGrid.insert(p);
@@ -197,11 +205,20 @@ export class PhysicsEngine {
     }
   }
 
-  private markSupport(p: Particle, nx: number, ny: number): void {
-    if (ny > -0.35) return; // the other grain is not below
-    if (Math.abs(nx) < 0.2) p.supportUnder = true;
-    else if (nx > 0) p.supportL = true;
-    else p.supportR = true;
+/**
+   * Contact classification (n points from the neighbour to this grain):
+   *  - below (ny < -0.35) → something carries the grain's weight;
+   *  - left / right (|nx| > 0.15, not above) → the grain is held on that side.
+   * A grain is at rest when carried AND held on both sides (a pocket, or wedged
+   * against a neighbour or wall). Carried with nothing on either side = perched.
+   */
+  private markSupport(p: Particle, nx: number, ny: number, fromSettled = true): void {
+    const s = classifyContact(nx, ny);
+    if (s.under) p.supportUnder = true;
+    if (s.left) p.supportL = true;
+    if (s.right) p.supportR = true;
+    // Only settled sand presses down for real; a grain still rolling over it does not.
+    if (s.above && fromSettled) p.supportAbove = true;
   }
 
   private resolveStatic(p: Particle, q: Particle, allowWake: boolean): void {
@@ -226,8 +243,8 @@ export class PhysicsEngine {
     p.y += ny * overlap;
     const vn = p.vx * nx + p.vy * ny;
     if (vn < 0) {
-      if (allowWake && p.r >= WAKE_MIN_RADIUS && -vn * p.mass > WAKE_MOMENTUM) {
-        this.pendingWake.push({ q, x: p.x, y: p.y, speed: -vn });
+      if (allowWake && p.r >= WAKE_SIZE_RATIO * q.r && -vn > WAKE_MIN_SPEED) {
+        this.pendingWake.push({ q, x: p.x, y: p.y, speed: -vn, r: p.r });
       }
       p.vx -= (1 + RESTITUTION) * vn * nx;
       p.vy -= (1 + RESTITUTION) * vn * ny;
@@ -273,8 +290,8 @@ export class PhysicsEngine {
       q.vy += ty * FRICTION * wq;
     }
     // A slow neighbour below counts as support (grains settle on settling grains).
-    if (Math.hypot(q.vx, q.vy) < SLEEP_SPEED * 2) this.markSupport(p, nx, ny);
-    if (Math.hypot(p.vx, p.vy) < SLEEP_SPEED * 2) this.markSupport(q, -nx, -ny);
+    if (Math.hypot(q.vx, q.vy) < SLEEP_SPEED * 4) this.markSupport(p, nx, ny, false);
+    if (Math.hypot(p.vx, p.vy) < SLEEP_SPEED * 4) this.markSupport(q, -nx, -ny, false);
   }
 
   // ------------------------------------------------------------- deposition
@@ -288,21 +305,27 @@ export class PhysicsEngine {
         continue;
       }
       const sp = Math.hypot(p.vx, p.vy);
-      const stable = p.onFloor || (p.supportL && p.supportR) || p.supportUnder;
-      const leaning = p.supportL || p.supportR;
-      // Fully supported grains rest quickly; grains leaning on one neighbour rest
-      // only once nearly motionless (static friction on a slope).
+      // Sand only comes to rest on the floor or in a pocket (held from both sides).
+      // ...or buried: carried from below and pressed from above.
+      const stable = p.onFloor || (p.supportUnder && ((p.supportL && p.supportR) || p.supportAbove));
+      // Perched on top of a single grain: real sand never balances there. Break the
+      // symmetry so it rolls off to one side.
+      const perched = !stable && p.supportUnder && !p.supportL && !p.supportR;
+      if (perched) p.vx += (p.id % 2 ? 1 : -1) * 90 * dt; // steady push to one side
+      // Carried by a single contact off to one side: a sphere always rolls off, downhill.
+      const oneSided = !stable && p.supportUnder && p.supportL !== p.supportR;
+      if (oneSided) p.vx += (p.supportL ? 1 : -1) * 90 * dt;
       // Granular contacts dissipate energy: supported grains lose their jitter quickly.
-      if (stable || leaning) {
+      if (stable) {
         const k = Math.pow(0.02, dt); // ~ -98% per second
         p.vx *= k;
-        p.vy *= stable ? k : 1;
+        p.vy *= k;
       }
       if (stable && sp < SLEEP_SPEED * 1.6) p.restTimer += dt;
-      else if (leaning && sp < SLEEP_SPEED * 0.5) p.restTimer += dt * 0.4;
       else p.restTimer = Math.max(0, p.restTimer - dt * 2);
       const age = this.time - p.bornAt;
-      if (p.restTimer > SLEEP_TIME || (age > MAX_ACTIVE_AGE && sp < 25)) {
+      // Safety net against endless jitter — but never freezes a grain perched on top of another.
+      if (p.restTimer > SLEEP_TIME || (age > MAX_ACTIVE_AGE && sp < 25 && !perched && !oneSided) || (age > MAX_ACTIVE_AGE * 1.5 && sp < 5) /* pinned from above */) {
         this.deposit(p);
       } else {
         keep.push(p);
@@ -318,6 +341,7 @@ export class PhysicsEngine {
     this.statics.add(p);
     this.staticGrid.insert(p);
     this.newlyDeposited.push(p);
+    this.recent.push(p);
     this.onDeposit?.(p);
   }
 
@@ -342,9 +366,10 @@ export class PhysicsEngine {
   /** Is a deposited grain still resting on something? */
   hasSupport(s: Particle): boolean {
     if (s.y + s.r >= this.height - SUPPORT_SLOP) return true;
-    let L = false;
-    let R = false;
+    let L = s.x - s.r <= SUPPORT_SLOP;
+    let R = s.x + s.r >= this.width - SUPPORT_SLOP;
     let U = false;
+    let pinned = false;
     this.staticGrid.query(s.x, s.y, s.r + this.maxR, (q) => {
       if (q === s) return;
       const dx = s.x - q.x;
@@ -353,14 +378,15 @@ export class PhysicsEngine {
       const d2 = dx * dx + dy * dy;
       if (d2 >= rr * rr || d2 === 0) return;
       const d = Math.sqrt(d2);
-      const nx = dx / d;
-      const ny = dy / d;
-      if (ny > -0.35) return;
-      if (Math.abs(nx) < 0.2) U = true;
-      else if (nx > 0) L = true;
-      else R = true;
+      if (dy / d > 0.3) pinned = true; // another grain rests on top of it
+      const c = classifyContact(dx / d, dy / d);
+      U ||= c.under;
+      L ||= c.left;
+      R ||= c.right;
     });
-    return U || (L && R);
+    // Supported unless perched on top of a single grain or floating. A grain carried and held
+    // on one side is blocked, not perched: waking it would only make it twitch.
+    return pinned || (U && (L || R));
   }
 
   private processWakes(): void {
@@ -374,7 +400,7 @@ export class PhysicsEngine {
     const woken: Particle[] = [];
     for (const w of this.pendingWake) {
       // Displace a small crater around the impact point.
-      const radius = Math.min(16, 3 + w.speed * 0.05);
+      const radius = w.r * (1 + Math.min(1.5, w.speed / 200));
       this.staticGrid.query(w.x, w.y, radius + this.maxR, (s) => {
         if (budget <= 0 || !this.statics.has(s)) return;
         const dx = s.x - w.x;
@@ -393,6 +419,7 @@ export class PhysicsEngine {
 
   /** Grains that lost their support start to slide: small avalanches. */
   private cascade(woken: Particle[], budget: number): void {
+    budget = Math.min(budget, this.config.maxActive - this.actives.length);
     let frontier = woken;
     while (frontier.length && budget > 0) {
       const next: Particle[] = [];
@@ -408,6 +435,32 @@ export class PhysicsEngine {
       }
       frontier = next;
     }
+  }
+
+  private sweepTimer = 0;
+  private recent: Particle[] = [];
+
+  /**
+   * Deposited grains that lost their support (neighbours slid away, sizes changed
+   * after a city change, the bed sank) start rolling again. Checks recent deposits
+   * plus a random sample each tick, so the cost stays small.
+   */
+  private sweepStability(dt: number): void {
+    this.sweepTimer -= dt;
+    if (this.sweepTimer > 0 || this.statics.size === 0) return;
+    this.sweepTimer = 0.25;
+    const arr = [...this.statics];
+    const sample = this.recent.splice(0);
+    for (let i = 0; i < Math.min(30, arr.length); i++) sample.push(arr[(Math.random() * arr.length) | 0]);
+    const woken: Particle[] = [];
+    for (const s of sample) {
+      if (this.actives.length >= this.config.maxActive) break;
+      if (this.statics.has(s) && !this.hasSupport(s)) {
+        this.wake(s, (Math.random() < 0.5 ? -1 : 1) * 10, 0);
+        woken.push(s);
+      }
+    }
+    if (woken.length) this.cascade(woken, 20);
   }
 
   /** Occasionally nudge one exposed surface grain so the bed keeps settling. */
@@ -470,7 +523,10 @@ export class PhysicsEngine {
     const tooTall = this.bedHeight > this.config.maxPileFraction * this.height;
     const tooMany = this.statics.size > this.config.maxStatic;
     if (tooTall || tooMany) {
-      const urgency = tooMany ? Math.min(4, this.statics.size / this.config.maxStatic) : 1;
+      // Sink faster the further the bed is over its limits (e.g. a big backlog of large grains).
+      const heightOver = this.bedHeight / (this.config.maxPileFraction * this.height) - 1;
+      const countOver = this.statics.size / this.config.maxStatic - 1;
+      const urgency = Math.min(8, 1 + 12 * Math.max(0, heightOver, countOver));
       this.sinkAccum += SINK_SPEED * urgency * dt;
     }
     if (this.sinkAccum >= 1) {
@@ -509,13 +565,13 @@ export class PhysicsEngine {
   // ------------------------------------------------------------------ queries
 
   /** Closest grain under a point, with a minimum touch radius for tiny grains. */
-  hitTest(x: number, y: number, minRadius = 7): Particle | undefined {
+  hitTest(x: number, y: number, minRadius = 12): Particle | undefined {
+    // Picks the grain whose *edge* is closest, so tiny grains are as easy to reach as big ones.
     let best: Particle | undefined;
     let bestD = Infinity;
     const test = (p: Particle) => {
-      const d = Math.hypot(p.x - x, p.y - y);
-      const reach = Math.max(p.r + 2, minRadius);
-      if (d <= reach && d < bestD && p.eventId) {
+      const d = Math.max(0, Math.hypot(p.x - x, p.y - y) - p.r);
+      if (d <= minRadius && d < bestD && p.eventId) {
         best = p;
         bestD = d;
       }
@@ -538,6 +594,18 @@ export class PhysicsEngine {
     this.config.ambientMotion = ambient;
     if (this.actives.length) this.deposit(p); // safety net
     this.actives = saved;
+  }
+
+  clear(): void {
+    for (const p of this.actives) p.state = 'removed';
+    for (const s of this.statics) s.state = 'removed';
+    this.actives = [];
+    this.statics.clear();
+    this.staticGrid.clear();
+    this.newlyDeposited = [];
+    this.pendingWake = [];
+    this.bedHeight = 0;
+    this.dirty = true;
   }
 
   forEachStatic(fn: (p: Particle) => void): void {

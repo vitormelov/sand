@@ -34,6 +34,7 @@ export class ParticleRenderer {
     }
     this.canvas.style.width = `${w}px`;
     this.canvas.style.height = `${h}px`;
+    this.ctx.imageSmoothingQuality = 'high';
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
