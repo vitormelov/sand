@@ -9,6 +9,8 @@ import { IconList, IconSettings } from './components/icons';
 import { Onboarding } from './components/Onboarding';
 import { ParticleCanvas, type GrainRef } from './components/ParticleCanvas';
 import { WorldMap } from './components/WorldMap';
+import { eventPoints } from './map/eventPoints';
+import { loadWorld } from './map/worldData';
 import { PrivacyDialog } from './components/PrivacyDialog';
 import { RecentList } from './components/RecentList';
 import { SettingsPanel } from './components/SettingsPanel';
@@ -148,6 +150,14 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
 
   const selectedEvent = selected ? store.events.get(selected.id) : undefined;
   const previewEvent = hovered ? store.events.get(hovered.eventId) : undefined;
+
+  // Red marker on the map where the pinned (or hovered) story happened.
+  const [centroids, setCentroids] = useState<Map<string, [number, number]>>();
+  useEffect(() => {
+    if (prefs.showMap && !centroids) loadWorld().then((d) => setCentroids(d.centroids), () => undefined);
+  }, [prefs.showMap, centroids]);
+  const focusEvent = selectedEvent ?? previewEvent;
+  const markers = useMemo(() => (focusEvent && centroids ? eventPoints(focusEvent, centroids) : []), [focusEvent, centroids]);
   const selectedImpact = selected ? store.impacts.get(selected.id) : undefined;
   useEffect(() => {
     if (selected && !selectedEvent) setSelected(null); // expired while open
@@ -183,8 +193,8 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
     : undefined;
 
   return (
-    <main className={`app ${chromeHidden ? 'is-ambient' : ''}`}>
-      {prefs.showMap && <WorldMap />}
+    <main className={`app ${chromeHidden ? 'is-ambient' : ''} ${reducedMotion ? 'reduce-motion' : ''}`}>
+      {prefs.showMap && <WorldMap markers={markers} />}
       <ParticleCanvas
         store={store}
         settings={simSettings}
