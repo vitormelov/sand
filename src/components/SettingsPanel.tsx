@@ -319,6 +319,15 @@ export function SettingsPanel({ prefs, profile, sources, account, onProfileChang
         </div>
         <Toggle label="Modo ambiente" hint="Os controles somem após alguns segundos sem uso." checked={prefs.ambient} onChange={(v) => onChange({ ambient: v })} />
         <Toggle label="Mapa ao fundo" hint="Silhueta do mundo, em traço fino, atrás da areia." checked={prefs.showMap} onChange={(v) => onChange({ showMap: v })} />
+        {prefs.showMap && (
+          <Range label="Intensidade do mapa" value={prefs.mapIntensity} min={0.2} max={2} step={0.05} onChange={(v) => onChange({ mapIntensity: v })} format={x} />
+        )}
+        <Toggle
+          label="Títulos ao cair"
+          hint="Um balão com o título da notícia desce ao lado do grão e some quando ele assenta."
+          checked={prefs.fallingTitles}
+          onChange={(v) => onChange({ fallingTitles: v })}
+        />
         <Toggle label="Mostrar indicadores" checked={prefs.showIndicators} onChange={(v) => onChange({ showIndicators: v })} />
         <Toggle label="Avisos de situações críticas" hint="Uma linha discreta no topo quando houver risco imediato perto de você." checked={prefs.criticalAlerts} onChange={(v) => onChange({ criticalAlerts: v })} />
         <Toggle label="Som" hint="Um toque quase inaudível quando grãos maiores assentam." checked={prefs.sound} onChange={(v) => onChange({ sound: v })} />

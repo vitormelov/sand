@@ -132,6 +132,10 @@ describe('SettingsPanel', () => {
     expect(onChange).toHaveBeenLastCalledWith({ density: 'high' });
     await userEvent.click(screen.getByRole('switch', { name: /Mostrar indicadores/ }));
     expect(onChange).toHaveBeenLastCalledWith({ showIndicators: false });
+    fireEvent.change(screen.getByRole('slider', { name: /Intensidade do mapa/ }), { target: { value: '1.6' } });
+    expect(onChange).toHaveBeenLastCalledWith({ mapIntensity: 1.6 });
+    await userEvent.click(screen.getByRole('switch', { name: /Títulos ao cair/ }));
+    expect(onChange).toHaveBeenLastCalledWith({ fallingTitles: false });
     await userEvent.click(screen.getByRole('switch', { name: /Mapa ao fundo/ }));
     expect(onChange).toHaveBeenLastCalledWith({ showMap: false });
   });
@@ -188,6 +192,14 @@ describe('preferences storage', () => {
     expect(p.interests).toEqual(['economy']);
     expect(p.location).toMatchObject({ countryCode: 'BR', lat: -3.7 });
     expect(p.affinity.economy).toBe(10);
+    expect(sanitizePrefs({ mapIntensity: 9 }).mapIntensity).toBe(2);
+  });
+
+  it('first visit: dark theme and the default map strength', () => {
+    expect(DEFAULT_PREFS.theme).toBe('dark');
+    expect(sanitizePrefs({}).theme).toBe('dark');
+    expect(sanitizePrefs({ theme: 'auto' }).theme).toBe('auto'); // a saved choice is kept
+    expect(sanitizePrefs({}).mapIntensity).toBe(1);
   });
 });
 

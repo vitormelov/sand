@@ -36,6 +36,7 @@ export function ParticleCanvas({ store, settings, selectedEventId, onSelect, onH
     sim.current = s;
     if (simRef) simRef.current = s;
     store.attachSink(s);
+    s.setLabelSource((id) => store.events.get(id)?.title);
     s.start();
     if (import.meta.env.DEV) (window as unknown as { __sand?: SandSimulation }).__sand = s;
     return () => {

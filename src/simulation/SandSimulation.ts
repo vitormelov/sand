@@ -1,7 +1,7 @@
 import { scoreToRadius } from '../../shared/impact/radius';
 import { createParticle, type Particle } from './Particle';
 import { DEFAULT_PHYSICS, PhysicsEngine } from './PhysicsEngine';
-import { ParticleRenderer } from './ParticleRenderer';
+import { BALLOON_TOP, ParticleRenderer, type Balloon } from './ParticleRenderer';
 import { GrainSound } from './sound';
 import { CEILING_BIN, mapCeiling } from '../map/terrain';
 import { loadWorld, type Lines } from '../map/worldData';
@@ -16,6 +16,8 @@ export interface SimSettings {
   theme?: 'light' | 'dark';
   /** Keep the sand under the background map's bottom edge (on when the map is shown). */
   terrain?: boolean;
+  /** Show the news title in a balloon beside grains while they fall. */
+  titles?: boolean;
 }
 
 export interface SpawnRequest {
@@ -69,6 +71,12 @@ export function viewScale(width: number): number {
 }
 const DEVELOPMENT_SCALE = 0.62;
 const MAX_QUEUE = 600;
+const MAX_BALLOONS = 3;
+const BALLOON_FADE_OUT_S = 1.2;
+/** A balloon never lasts longer than this (s), and leaves once its grain is this still. */
+const BALLOON_MAX_S = 8;
+const BALLOON_STILL_SPEED = 20; // px/s
+const BALLOON_STILL_S = 0.4;
 
 /**
  * Orchestrates the canvas, the physics and the spawn queue. Runs its own
@@ -102,6 +110,8 @@ export class SandSimulation {
   private layoutDirty = false;
   private lastRelayout = 0;
   private world: Lines[] | null = null;
+  private balloons: Balloon[] = [];
+  private labelFor?: (eventId: string) => string | undefined;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -427,6 +437,48 @@ export class SandSimulation {
     return (pick + 0.5) * bin + (Math.random() - 0.5) * bin;
   }
 
+  /** Where titles come from (the store). Without it, no balloons (e.g. the login backdrop). */
+  setLabelSource(fn: ((eventId: string) => string | undefined) | undefined): void {
+    this.labelFor = fn;
+  }
+
+  /**
+   * A few falling grains (the most impactful first) carry their title beside them; when the
+   * grain lands, its balloon fades out where it is. Capped so the initial pour stays readable.
+   */
+  private updateBalloons(dt: number): void {
+    if (!this.settings.titles || !this.labelFor || this.settings.reducedMotion) {
+      this.balloons.length = 0;
+      return;
+    }
+    const still: Balloon[] = [];
+    for (const b of this.balloons) {
+      // Landed when the physics deposits the grain, when it has been almost still for a moment
+      // (grains settling on the pile can stay "falling" for long), or after a few seconds anyway.
+      b.age = (b.age ?? 0) + dt;
+      b.still = Math.hypot(b.p.vx, b.p.vy) < BALLOON_STILL_SPEED ? (b.still ?? 0) + dt : 0;
+      if (b.p.state !== 'falling' || b.still > BALLOON_STILL_S || b.age > BALLOON_MAX_S) b.landed = true;
+      b.alpha = b.landed ? b.alpha - dt / BALLOON_FADE_OUT_S : Math.min(1, b.alpha + dt * 4);
+      if (b.alpha > 0 && b.p.state !== 'removed') still.push(b);
+    }
+    this.balloons = still;
+    // Room for one balloon on a phone, two on a tablet, three on a desktop.
+    const max = this.engine.width < 700 ? 1 : this.engine.width < 1200 ? 2 : MAX_BALLOONS;
+    let flying = still.filter((b) => !b.landed && !b.hidden).length;
+    if (flying >= max) return;
+    const taken = new Set(still.map((b) => b.p));
+    const candidates = this.engine.actives
+      .filter((p) => p.eventId && !p.developmentId && !taken.has(p) && p.y > BALLOON_TOP + 70 && p.y < this.engine.height * 0.7)
+      .sort((a, b) => b.impact - a.impact);
+    for (const p of candidates) {
+      if (flying >= max) break;
+      const text = this.labelFor(p.eventId);
+      if (!text) continue;
+      this.balloons.push({ p, text, alpha: 0, landed: false });
+      flying++;
+    }
+  }
+
   private isFresh(p: Particle, now: number): boolean {
     return !p.viewed && !!p.eventId && p.newsAt != null && now - p.newsAt < FRESH_MS && p.state !== 'removed';
   }
@@ -515,6 +567,7 @@ export class SandSimulation {
     }
 
     if (!this.paused) this.engine.step(simDt);
+    this.updateBalloons(dt);
     this.pruneTimer -= dt;
     if (this.pruneTimer <= 0) this.prune();
     this.toneTimer -= dt;
@@ -527,6 +580,7 @@ export class SandSimulation {
       critical: this.critical,
       fresh: this.fresh,
       reducedMotion: this.settings.reducedMotion,
+      balloons: this.balloons,
     });
     this.raf = requestAnimationFrame(this.frame);
   };

@@ -23,6 +23,10 @@ export interface Prefs {
   sound: boolean;
   criticalAlerts: boolean;
   showMap: boolean;
+  /** Multiplier for the strength of the map lines (1 = default). */
+  mapIntensity: number;
+  /** A balloon with the news title rides beside each grain while it falls. */
+  fallingTitles: boolean;
   theme: 'auto' | 'light' | 'dark';
 }
 
@@ -41,7 +45,10 @@ export const DEFAULT_PREFS: Prefs = {
   sound: false,
   criticalAlerts: true,
   showMap: true,
-  theme: 'auto',
+  mapIntensity: 1,
+  fallingTitles: true,
+  // First visit: black background. People can switch to light or to the system setting.
+  theme: 'dark',
 };
 
 const KEY = 'sand:prefs:v1';
@@ -84,7 +91,9 @@ export function sanitizePrefs(raw: unknown): Prefs {
     sound: r.sound === true,
     criticalAlerts: typeof r.criticalAlerts === 'boolean' ? r.criticalAlerts : true,
     showMap: typeof r.showMap === 'boolean' ? r.showMap : true,
-    theme: ['auto', 'light', 'dark'].includes(r.theme) ? r.theme : 'auto',
+    mapIntensity: num(r.mapIntensity, 0.2, 2, 1),
+    fallingTitles: typeof r.fallingTitles === 'boolean' ? r.fallingTitles : true,
+    theme: ['auto', 'light', 'dark'].includes(r.theme) ? r.theme : DEFAULT_PREFS.theme,
   };
 }
 

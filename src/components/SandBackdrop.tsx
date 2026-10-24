@@ -8,8 +8,8 @@ const HOUR = 3_600_000;
 const FIRST_POUR = 160;
 const TRICKLE_MS = 1_300;
 
-/** Mostly small grains, a few big ones — the look of a real day of news. */
-const decorativeImpact = () => Math.round(100 * Math.pow(Math.random(), 2.2));
+/** Mostly small grains, a few big ones (≈10% with radius over 20 px) — like a real day of news. */
+const decorativeImpact = () => Math.round(100 * Math.pow(Math.random(), 4.5));
 
 /**
  * The login screen's background: the same sand, map and physics as the site, falling on its
@@ -57,7 +57,7 @@ export function SandBackdrop({ theme, prefs, reducedMotion }: { theme: Theme; pr
 
   return (
     <div className="auth-backdrop" aria-hidden="true">
-      {prefs.showMap && <WorldMap theme={theme} />}
+      {prefs.showMap && <WorldMap theme={theme} intensity={prefs.mapIntensity} />}
       <div className="canvas-host">
         <canvas ref={canvasRef} className="sand-canvas" />
       </div>

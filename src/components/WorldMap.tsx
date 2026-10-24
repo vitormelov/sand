@@ -8,7 +8,7 @@ import { loadWorld, type Lines } from '../map/worldData';
  * Static: redrawn only on resize. On top of it, an optional tiny red marker shows
  * where the hovered/pinned story happened.
  */
-export function WorldMap({ markers = [], theme = 'light' }: { markers?: MapPoint[]; theme?: 'light' | 'dark' }) {
+export function WorldMap({ markers = [], theme = 'light', intensity = 1 }: { markers?: MapPoint[]; theme?: 'light' | 'dark'; intensity?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
 
@@ -49,8 +49,10 @@ export function WorldMap({ markers = [], theme = 'light' }: { markers?: MapPoint
         ctx.stroke();
       };
       const rgb = theme === 'dark' ? '233,233,230' : '17,17,17';
-      stroke(lines.borders, `rgba(${rgb},${theme === 'dark' ? 0.09 : 0.08})`, 0.5);
-      stroke(lines.coast, `rgba(${rgb},${theme === 'dark' ? 0.17 : 0.15})`, 0.7);
+      // Base strength per theme, scaled by the user's "map intensity" setting.
+      const a = (base: number) => Math.min(1, base * intensity).toFixed(3);
+      stroke(lines.borders, `rgba(${rgb},${a(0.18)})`, 0.5);
+      stroke(lines.coast, `rgba(${rgb},${a(theme === 'dark' ? 0.345 : 0.36)})`, 0.7);
     };
 
     loadWorld()
@@ -68,7 +70,7 @@ export function WorldMap({ markers = [], theme = 'light' }: { markers?: MapPoint
       disposed = true;
       ro.disconnect();
     };
-  }, [theme]);
+  }, [theme, intensity]);
 
   const project = size ? fitWorld(size.w, size.h) : null;
   return (

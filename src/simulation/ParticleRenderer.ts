@@ -5,8 +5,8 @@ export type RenderTheme = 'light' | 'dark';
 
 /** Canvas colours per theme (the canvas can't read CSS variables). */
 const PALETTES = {
-  light: { ink: '#111111', rgb: '17,17,17', paper: '#ffffff' },
-  dark: { ink: '#e9e9e6', rgb: '233,233,230', paper: '#0f0f10' },
+  light: { ink: '#111111', rgb: '17,17,17', paper: '#ffffff', paperRgb: '255,255,255', text: '#4a4a4a', line: '#dedede' },
+  dark: { ink: '#e9e9e6', rgb: '233,233,230', paper: '#0f0f10', paperRgb: '15,15,16', text: '#c2c2be', line: '#333335' },
 } as const;
 let pal: (typeof PALETTES)[RenderTheme] = PALETTES.light;
 const TAU = Math.PI * 2;
@@ -17,6 +17,60 @@ const level = (tone: number) => Math.max(1, Math.round(tone * LEVELS));
 const FRESH_MS = 60 * 60_000;
 /** Same rhythm as the red map marker. */
 const FRESH_PULSE_MS = 1600;
+
+/** A title balloon that rides beside a falling grain (see SandSimulation.updateBalloons). */
+export interface Balloon {
+  p: Particle;
+  text: string;
+  alpha: number;
+  /** The grain has landed: the balloon stays where it is and fades out. */
+  landed: boolean;
+  /** Wrapped lines and box width, measured once. */
+  lines?: string[];
+  width?: number;
+  /** Which side of the grain the balloon sits on, decided when it first appears. */
+  right?: boolean;
+  /** No free spot when it appeared (it would cover another balloon): never drawn. */
+  hidden?: boolean;
+  /** Seconds since it appeared, and seconds its grain has been almost still. */
+  age?: number;
+  still?: number;
+}
+
+/** Balloons never rise into the top bar (logo, clock, icons). */
+export const BALLOON_TOP = 64;
+
+const BALLOON_FONT = "11.5px 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
+const BALLOON_MAX_W = 220;
+const BALLOON_PAD_X = 8;
+const BALLOON_PAD_Y = 6;
+const BALLOON_LINE_H = 15;
+
+/** Up to two lines within the max width; the second ends in "…" when the title is longer. */
+export function wrapTitle(measure: (s: string) => number, text: string): string[] {
+  const max = BALLOON_MAX_W - 2 * BALLOON_PAD_X;
+  const words = text.trim().split(/\s+/);
+  const lines: string[] = [];
+  let line = '';
+  for (let i = 0; i < words.length; i++) {
+    const next = line ? `${line} ${words[i]}` : words[i];
+    if (measure(next) <= max) {
+      line = next;
+      continue;
+    }
+    if (lines.length === 1 || !line) {
+      // Last line (or a single word wider than the box): cut it to fit, with an ellipsis.
+      let rest = line ? `${line} ${words.slice(i).join(' ')}` : words.slice(i).join(' ');
+      while (rest.length > 1 && measure(`${rest}…`) > max) rest = rest.slice(0, -1);
+      lines.push(`${rest.trimEnd()}…`);
+      return lines.slice(0, 2);
+    }
+    lines.push(line);
+    line = words[i];
+  }
+  if (line) lines.push(line);
+  return lines;
+}
 
 /**
  * "Already opened": a small dot at the centre of the grain, always in contrast with it.
@@ -134,6 +188,7 @@ export class ParticleRenderer {
       /** News from the last hour not yet opened. */
       fresh?: Particle[];
       reducedMotion: boolean;
+      balloons?: Balloon[];
     },
   ): void {
     // Incremental bake of grains deposited since the last frame.
@@ -239,5 +294,61 @@ export class ParticleRenderer {
       engine.forEachStatic(visit);
       engine.actives.forEach(visit);
     }
+
+    if (opts.balloons?.length) this.drawBalloons(opts.balloons);
+  }
+
+  /** Title balloons: up and to the side of the grain, joined to it by a short diagonal. */
+  private drawBalloons(balloons: Balloon[]): void {
+    const c = this.ctx;
+    c.font = BALLOON_FONT;
+    c.textBaseline = 'top';
+    c.lineWidth = 1;
+    const placed: { x: number; y: number; w: number; h: number }[] = [];
+    const boxAt = (p: Particle, right: boolean, bw: number, bh: number) => {
+      const d = p.r * Math.SQRT1_2;
+      const ax = right ? p.x + d : p.x - d;
+      const ay = p.y - d;
+      return { ax, ay, x: right ? ax + 12 : ax - 12 - bw, y: Math.max(BALLOON_TOP, ay - 12 - bh), w: bw, h: bh };
+    };
+    const hits = (r: { x: number; y: number; w: number; h: number }) =>
+      r.x < 6 || r.x + r.w > this.w - 6 || placed.some((o) => r.x < o.x + o.w + 6 && o.x < r.x + r.w + 6 && r.y < o.y + o.h + 6 && o.y < r.y + r.h + 6);
+    for (const b of balloons) {
+      if (b.alpha <= 0.01) continue;
+      if (!b.lines) {
+        b.lines = wrapTitle((s) => c.measureText(s).width, b.text);
+        b.width = Math.ceil(Math.max(...b.lines.map((l) => c.measureText(l).width))) + 2 * BALLOON_PAD_X;
+      }
+      const { p } = b;
+      const bw = b.width!;
+      const bh = b.lines.length * BALLOON_LINE_H + 2 * BALLOON_PAD_Y - 3;
+      // The side is chosen once (no flipping mid-fall): the right, unless it leaves the
+      // screen or covers another balloon. With no free side at all, this one is skipped.
+      if (b.right === undefined) {
+        const rightFree = !hits(boxAt(p, true, bw, bh));
+        const leftFree = !hits(boxAt(p, false, bw, bh));
+        if (!rightFree && !leftFree && placed.length) b.hidden = true;
+        b.right = rightFree || !leftFree;
+      }
+      if (b.hidden) continue;
+      const right = b.right;
+      const { ax, ay, x: bx, y: by } = boxAt(p, right, bw, bh);
+      placed.push({ x: bx, y: by, w: bw, h: bh });
+      c.globalAlpha = b.alpha;
+      c.strokeStyle = pal.line;
+      c.beginPath();
+      c.moveTo(ax, ay);
+      c.lineTo(right ? bx : bx + bw, Math.min(by + bh, ay));
+      c.stroke();
+      c.fillStyle = `rgba(${pal.paperRgb},0.92)`;
+      c.beginPath();
+      c.roundRect(bx, by, bw, bh, 6);
+      c.fill();
+      c.stroke();
+      c.fillStyle = pal.text;
+      b.lines.forEach((l, i) => c.fillText(l, bx + BALLOON_PAD_X, by + BALLOON_PAD_Y + i * BALLOON_LINE_H));
+    }
+    c.globalAlpha = 1;
+    c.fillStyle = pal.ink;
   }
 }

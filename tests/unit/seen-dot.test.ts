@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { seenDotStyle } from '../../src/simulation/ParticleRenderer';
+import { seenDotStyle, wrapTitle } from '../../src/simulation/ParticleRenderer';
 
 describe('seen dot', () => {
   it('stands out from its grain at every age, from fresh to almost faded', () => {
@@ -14,5 +14,21 @@ describe('seen dot', () => {
   it('uses the background colour on strong grains and the ink colour on faded ones', () => {
     expect(seenDotStyle(1).ink).toBe(false);
     expect(seenDotStyle(0.1).ink).toBe(true);
+  });
+});
+
+describe('falling title balloon', () => {
+  // 6 px per character: easy to reason about.
+  const measure = (s: string) => s.length * 6;
+
+  it('keeps short titles on one line', () => {
+    expect(wrapTitle(measure, 'Chuva forte em Fortaleza')).toEqual(['Chuva forte em Fortaleza']);
+  });
+
+  it('wraps long titles into two lines, the second cut with an ellipsis', () => {
+    const lines = wrapTitle(measure, 'Copom reduz a taxa Selic para 13,75% ao ano e indica novos cortes nas próximas reuniões do comitê');
+    expect(lines).toHaveLength(2);
+    for (const l of lines) expect(measure(l)).toBeLessThanOrEqual(220 - 16);
+    expect(lines[1].endsWith('…')).toBe(true);
   });
 });
