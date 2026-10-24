@@ -100,7 +100,8 @@ button {
   display: block;
   width: 100%;
   height: 100%;
-  touch-action: manipulation;
+  /* The finger slides over the sand to preview titles, so the browser must not pan or zoom here. */
+  touch-action: none;
 }
 
 /* ------------------------------------------------------------- chrome */
