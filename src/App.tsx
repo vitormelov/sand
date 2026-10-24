@@ -19,7 +19,7 @@ import { sendFeedback } from './services/api';
 import { startDemo } from './services/demo';
 import { clearAllLocal, DEFAULT_PREFS, loadFeedback, loadPrefs, saveFeedback, savePrefs, type FeedbackValue, type Prefs } from './services/storage';
 import { StreamClient } from './services/stream';
-import type { SandSimulation, SimSettings } from './simulation/SandSimulation';
+import { viewScale, type SandSimulation, type SimSettings } from './simulation/SandSimulation';
 import { SandStore, useStoreState } from './state/store';
 
 const IDLE_MS = 4_000;
@@ -233,7 +233,7 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
 
       {/* Always visible, even in ambient mode: fictitious data must never pass for real news. */}
       {demo && <span className="demo-badge">{lab ? 'LAB' : 'DEMO'} — dados fictícios</span>}
-      {lab && <LabPanel store={store} simRef={simRef} sizeScale={prefs.sizeScale} />}
+      {lab && <LabPanel store={store} simRef={simRef} sizeScale={prefs.sizeScale * viewScale(window.innerWidth)} />}
 
       {critical && (
         <div className="critical chrome-keep" role="status" aria-live="polite">

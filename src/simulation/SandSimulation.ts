@@ -48,8 +48,18 @@ export interface SimStats {
 
 // Caps sized for desktop-scale grains (7–50 px); the bed-height limit usually binds first.
 const DENSITY_STATICS = { low: 800, normal: 1500, high: 3000 } as const;
-/** Grains are rendered smaller on phones so the landscape keeps its proportions. */
-const MOBILE_SIZE = 0.6;
+/**
+ * Grains scale with the window width (reference 1920 px = 1×), so shrinking or enlarging
+ * the window scales the whole landscape instead of squeezing it. Limited so grains stay
+ * tappable on phones and don't get huge on ultrawide screens.
+ */
+const REFERENCE_WIDTH = 1920;
+const VIEW_SCALE_MIN = 0.4;
+const VIEW_SCALE_MAX = 1.25;
+
+export function viewScale(width: number): number {
+  return Math.min(VIEW_SCALE_MAX, Math.max(VIEW_SCALE_MIN, width / REFERENCE_WIDTH));
+}
 const DEVELOPMENT_SCALE = 0.62;
 const MAX_QUEUE = 600;
 
@@ -78,6 +88,8 @@ export class SandSimulation {
   private pruneTimer = 5;
   private paused = false;
   private toneTimer = 0;
+  private relayoutTimer?: ReturnType<typeof setTimeout>;
+  private layoutDirty = false;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -138,6 +150,7 @@ export class SandSimulation {
     this.running = false;
     cancelAnimationFrame(this.raf);
     this.ro?.disconnect();
+    clearTimeout(this.relayoutTimer);
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.sound.close();
   }
@@ -156,15 +169,26 @@ export class SandSimulation {
   private onResize(): void {
     const { width, height } = this.measure();
     if (width === this.engine.width && height === this.engine.height) return;
-    const wasScale = this.effectiveScale();
-    this.engine.resize(width, height);
+    const kx = width / this.engine.width;
+    const k = viewScale(width) / viewScale(this.engine.width);
+    // The landscape scales as a whole: positions, depth and grain sizes together.
+    this.engine.resize(width, height, k);
     this.renderer.resize(width, height, this.dpr);
     this.applySettings();
-    if (this.effectiveScale() !== wasScale) this.rescaleAll(); // crossed the phone/desktop threshold
+    // Only when the size limits kick in (k ≠ width ratio) does the shape change; then
+    // re-pour the sand once the user stops resizing, so nothing overlaps.
+    if (Math.abs(k - kx) > 0.01) this.layoutDirty = true;
+    clearTimeout(this.relayoutTimer);
+    if (this.layoutDirty) {
+      this.relayoutTimer = setTimeout(() => {
+        this.layoutDirty = false;
+        this.engine.relayout();
+      }, 250);
+    }
   }
 
   private effectiveScale(): number {
-    return this.settings.sizeScale * (this.engine.width < 700 ? MOBILE_SIZE : 1);
+    return this.settings.sizeScale * viewScale(this.engine.width);
   }
 
   private radiusFor(impact: number, development: boolean): number {

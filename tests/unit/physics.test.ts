@@ -13,7 +13,7 @@ const scoreToRadius = makeRadiusFn([
 ]);
 import { createParticle, type Particle } from '../../src/simulation/Particle';
 import { DEFAULT_PHYSICS, PhysicsEngine } from '../../src/simulation/PhysicsEngine';
-import { toneFor } from '../../src/simulation/SandSimulation';
+import { toneFor, viewScale } from '../../src/simulation/SandSimulation';
 
 const W = 400;
 const H = 300;
@@ -249,4 +249,75 @@ describe('physics engine', () => {
     expect(right.state).toBe('removed');
     expect(top.y + top.r).toBeCloseTo(300, 0); // slid down to the floor
   });
+
+  it('resizing the window: shrink then grow back re-pours the sand cleanly (no merged or stuck grains)', () => {
+    const e = new PhysicsEngine(1600, 800, { ...DEFAULT_PHYSICS, ambientMotion: false, maxStatic: 5000, maxPileFraction: 0.9 });
+    e.setMaxRadius(productionRadius(100));
+    for (let i = 0; i < 300; i++) {
+      const sc = Math.random() * 70;
+      e.add(createParticle({ eventId: 'g' + i, x: 30 + Math.random() * 1540, y: -i * 8, r: productionRadius(sc), impact: sc, critical: false, bornAt: 0 }));
+    }
+    for (let i = 0; i < 60 * 60; i++) e.step(dt);
+    const n = e.staticCount;
+
+    const overlapRatio = () => {
+      const all = [...e.statics];
+      let bad = 0;
+      for (let i = 0; i < all.length; i++)
+        for (let j = i + 1; j < all.length; j++) {
+          const a = all[i];
+          const b = all[j];
+          if (Math.hypot(a.x - b.x, a.y - b.y) < (a.r + b.r) * 0.8) bad++;
+        }
+      return bad / all.length;
+    };
+    const inBounds = () => [...e.statics].every((g) => g.x >= g.r - 0.5 && g.x <= e.width - g.r + 0.5 && g.y <= e.height - g.r + 0.5);
+
+    e.resize(700, 800);
+    const t0 = performance.now();
+    e.relayout();
+    const ms = performance.now() - t0;
+    expect(e.staticCount).toBe(n); // nothing lost
+    expect(inBounds()).toBe(true);
+    expect(overlapRatio()).toBeLessThan(0.02);
+
+    e.resize(1600, 800);
+    e.relayout();
+    expect(e.staticCount).toBe(n);
+    expect(inBounds()).toBe(true);
+    expect(overlapRatio()).toBeLessThan(0.02);
+    const xs = [...e.statics].map((g) => g.x);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(1600 * 0.85); // spread out again, no column
+    expect(ms).toBeLessThan(1500);
+  }, 60_000);
+
+  it('grains scale with the window width (both ways), within limits', () => {
+    expect(viewScale(1920)).toBe(1);
+    expect(viewScale(960)).toBe(0.5);
+    expect(viewScale(390)).toBe(0.4); // still tappable on phones
+    expect(viewScale(5000)).toBe(1.25);
+  });
+
+  it('a proportional resize scales the landscape as a whole: same shape, no overlaps, reversible', () => {
+    const e = new PhysicsEngine(1600, 800, { ...DEFAULT_PHYSICS, ambientMotion: false, maxStatic: 5000, maxPileFraction: 0.9 });
+    e.setMaxRadius(productionRadius(100));
+    for (let i = 0; i < 200; i++) {
+      const sc = Math.random() * 70;
+      e.add(createParticle({ eventId: 'g' + i, x: 30 + Math.random() * 1540, y: -i * 8, r: productionRadius(sc), impact: sc, critical: false, bornAt: 0 }));
+    }
+    for (let i = 0; i < 60 * 50; i++) e.step(dt);
+    const before = [...e.statics].map((g) => ({ g, x: g.x, y: g.y, r: g.r }));
+    e.resize(800, 800, 0.5); // half the width → grains half the size
+    for (const b of before) {
+      expect(b.g.r).toBeCloseTo(b.r * 0.5, 6);
+      expect(b.g.x).toBeCloseTo(b.x * 0.5, 6);
+      expect(800 - b.g.y).toBeCloseTo((800 - b.y) * 0.5, 6);
+    }
+    e.resize(1600, 800, 2); // and back
+    for (const b of before) {
+      expect(b.g.r).toBeCloseTo(b.r, 6);
+      expect(b.g.x).toBeCloseTo(b.x, 6);
+      expect(b.g.y).toBeCloseTo(b.y, 6);
+    }
+  }, 60_000);
 });

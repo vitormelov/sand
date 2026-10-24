@@ -50,6 +50,7 @@ const WAKE_MIN_SPEED = 60; // px/s
 const MAX_WAKE_PER_STEP = 40;
 const SINK_SPEED = 3; // px/s
 const SUPPORT_SLOP = 0.75;
+const RESIZE_GRACE_S = 30;
 
 function classifyContact(nx: number, ny: number): { under: boolean; left: boolean; right: boolean; above: boolean } {
   if (ny > 0.3) return { under: false, left: false, right: false, above: true }; // neighbour is above
@@ -105,20 +106,74 @@ export class PhysicsEngine {
   }
 
   /** Keep the bed anchored to the bottom edge when the viewport changes. */
-  resize(width: number, height: number): void {
-    const dy = height - this.height;
+  /**
+   * Viewport changed. Cheap and immediate: the landscape stretches/squeezes with the
+   * width (each grain keeps its relative horizontal position) and stays anchored to
+   * the bottom. Overlaps this creates are resolved by relayout() once resizing stops.
+   */
+  resize(width: number, height: number, sizeK = 1): void {
+    const kx = width / this.width;
+    const oldH = this.height;
     this.width = width;
     this.height = height;
-    for (const s of [...this.statics]) {
-      s.y += dy;
-      if (s.x - s.r > width) this.removeStatic(s);
-      else if (s.x + s.r > width) s.x = width - s.r;
+    const scale = (p: Particle) => {
+      p.r *= sizeK;
+      p.targetR *= sizeK;
+      p.mass = p.r * p.r;
+    };
+    for (const s of this.statics) {
+      scale(s);
+      // Depth below the bed surface scales with the grains, anchored to the bottom edge.
+      s.y = height - (oldH - s.y) * sizeK;
+      s.x = Math.min(width - s.r, Math.max(s.r, s.x * kx));
     }
     for (const p of this.actives) {
-      p.y += Math.max(0, dy);
-      p.x = Math.min(p.x, width - p.r);
+      scale(p);
+      p.y = height - (oldH - p.y) * sizeK;
+      p.x = Math.min(width - p.r, Math.max(p.r, p.x * kx));
     }
     this.rebuildStaticGrid();
+    this.dirty = true;
+  }
+
+  /**
+   * Re-pour the settled sand for the current viewport: grains are dropped again,
+   * bottom layer first, at their (scaled) horizontal positions and settle with the
+   * normal physics. Old sand stays at the bottom and nothing is left overlapping.
+   */
+  relayout(): void {
+    const grains = [...this.statics].sort((a, b) => b.y - a.y);
+    this.statics.clear();
+    this.staticGrid.clear();
+    const onDeposit = this.onDeposit;
+    this.onDeposit = undefined; // no sound while re-pouring
+    const bin = 8;
+    const tops = new Float32Array(Math.ceil(this.width / bin) + 1).fill(this.height);
+    for (const p of grains) {
+      p.r = p.targetR;
+      p.mass = p.r * p.r;
+      p.x = Math.min(this.width - p.r, Math.max(p.r, p.x));
+      // Start just above whatever already lies under this column.
+      let surface = this.height;
+      for (let i = Math.max(0, Math.floor((p.x - p.r) / bin)); i <= Math.min(tops.length - 1, Math.floor((p.x + p.r) / bin)); i++) {
+        surface = Math.min(surface, tops[i]);
+      }
+      p.y = surface - p.r - 1;
+      p.vx = p.vy = 0;
+      p.restTimer = 0;
+      p.state = 'falling';
+      this.dropInstant(p, 300);
+      if (!this.statics.has(p)) continue;
+      for (let i = Math.max(0, Math.floor((p.x - p.r) / bin)); i <= Math.min(tops.length - 1, Math.floor((p.x + p.r) / bin)); i++) {
+        tops[i] = Math.min(tops[i], p.y - p.r);
+      }
+    }
+    this.onDeposit = onDeposit;
+    this.newlyDeposited = [];
+    this.recent = [];
+    this.disturbed = [];
+    this.bedTimer = 0; // re-measure the bed now
+    this.resizeGrace = RESIZE_GRACE_S; // don't sink sand that a quick resize back would need
     this.dirty = true;
   }
 
@@ -522,11 +577,18 @@ export class PhysicsEngine {
     this.bedHeight = heights[Math.floor(heights.length * 0.8)] ?? 0;
   }
 
+  /** Seconds left in which a resize may not trigger sinking (the user may be about to resize back). */
+  private resizeGrace = 0;
+
   private compact(dt: number): void {
     this.bedTimer -= dt;
     if (this.bedTimer <= 0) {
       this.bedTimer = 0.5;
       this.measureBed();
+    }
+    if (this.resizeGrace > 0) {
+      this.resizeGrace -= dt;
+      return;
     }
     const tooTall = this.bedHeight > this.config.maxPileFraction * this.height;
     const tooMany = this.statics.size > this.config.maxStatic;
@@ -590,12 +652,12 @@ export class PhysicsEngine {
   }
 
   /** Reduced-motion placement: run this grain's fall to completion off-screen. */
-  dropInstant(p: Particle): void {
+  dropInstant(p: Particle, maxSteps = 1200): void {
     const saved = this.actives;
     this.actives = [p];
     const ambient = this.config.ambientMotion;
     this.config.ambientMotion = false;
-    for (let i = 0; i < 1200 && this.actives.length; i++) {
+    for (let i = 0; i < maxSteps && this.actives.length; i++) {
       this.substep(1 / 60);
       this.settle(1 / 60);
     }

@@ -2,7 +2,7 @@
 
 ## Tamanho dos grãos
 
-Raio de 7 px (impacto 0) a 50 px (impacto 100) no desktop (7 · 10 · 14 · 20 · 30 · 50 px para 0 · 20 · 40 · 60 · 80 · 100), curva em `RADIUS_CURVE` (`shared/impact/config.ts`); no celular (largura < 700 px) tudo é desenhado a 60%. Configurações → "Tamanho dos grãos" multiplica a curva. Crateras acontecem quando um grão ≥ 2× maior atinge outros a mais de 60 px/s.
+Raio de 7 px (impacto 0) a 50 px (impacto 100) no desktop (7 · 10 · 14 · 20 · 30 · 50 px para 0 · 20 · 40 · 60 · 80 · 100), curva em `RADIUS_CURVE` (`shared/impact/config.ts`). **O tamanho acompanha a largura da janela** (referência 1920 px = 1×; mínimo 0,4× em celulares, máximo 1,25× em ultrawide): ao diminuir ou aumentar a janela, a paisagem inteira escala junto — posições, profundidade e tamanho dos grãos —, mantendo a mesma forma, sem grãos se fundindo. Quando os limites de escala impedem isso, a areia é "despejada de novo" (relayout, ~20–40 ms) ¼ s depois do fim do redimensionamento, das camadas de baixo para cima; e o afundamento fica suspenso por 30 s, para que voltar ao tamanho anterior não perca grãos. Configurações → "Tamanho dos grãos" multiplica a curva. Crateras acontecem quando um grão ≥ 2× maior atinge outros a mais de 60 px/s.
 
 ## Aparência
 
