@@ -41,32 +41,31 @@ export interface Balloon {
 export const BALLOON_TOP = 64;
 
 const BALLOON_FONT = "11.5px 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
-const BALLOON_MAX_W = 220;
+export const BALLOON_MAX_W = 260;
 const BALLOON_PAD_X = 8;
 const BALLOON_PAD_Y = 6;
 const BALLOON_LINE_H = 15;
 
-/** Up to two lines within the max width; the second ends in "…" when the title is longer. */
+/** The whole title, wrapped by words to the balloon's width (as many lines as it needs). */
 export function wrapTitle(measure: (s: string) => number, text: string): string[] {
   const max = BALLOON_MAX_W - 2 * BALLOON_PAD_X;
-  const words = text.trim().split(/\s+/);
   const lines: string[] = [];
   let line = '';
-  for (let i = 0; i < words.length; i++) {
-    const next = line ? `${line} ${words[i]}` : words[i];
+  for (let word of text.trim().split(/\s+/)) {
+    const next = line ? `${line} ${word}` : word;
     if (measure(next) <= max) {
       line = next;
       continue;
     }
-    if (lines.length === 1 || !line) {
-      // Last line (or a single word wider than the box): cut it to fit, with an ellipsis.
-      let rest = line ? `${line} ${words.slice(i).join(' ')}` : words.slice(i).join(' ');
-      while (rest.length > 1 && measure(`${rest}…`) > max) rest = rest.slice(0, -1);
-      lines.push(`${rest.trimEnd()}…`);
-      return lines.slice(0, 2);
+    if (line) lines.push(line);
+    // A single word wider than the balloon (a long URL, say) is split, never cut.
+    while (measure(word) > max && word.length > 1) {
+      let n = word.length - 1;
+      while (n > 1 && measure(word.slice(0, n)) > max) n--;
+      lines.push(word.slice(0, n));
+      word = word.slice(n);
     }
-    lines.push(line);
-    line = words[i];
+    line = word;
   }
   if (line) lines.push(line);
   return lines;

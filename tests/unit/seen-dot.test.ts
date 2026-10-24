@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { seenDotStyle, wrapTitle } from '../../src/simulation/ParticleRenderer';
+import { BALLOON_MAX_W, seenDotStyle, wrapTitle } from '../../src/simulation/ParticleRenderer';
 
 describe('seen dot', () => {
   it('stands out from its grain at every age, from fresh to almost faded', () => {
@@ -25,10 +25,17 @@ describe('falling title balloon', () => {
     expect(wrapTitle(measure, 'Chuva forte em Fortaleza')).toEqual(['Chuva forte em Fortaleza']);
   });
 
-  it('wraps long titles into two lines, the second cut with an ellipsis', () => {
-    const lines = wrapTitle(measure, 'Copom reduz a taxa Selic para 13,75% ao ano e indica novos cortes nas próximas reuniões do comitê');
-    expect(lines).toHaveLength(2);
-    for (const l of lines) expect(measure(l)).toBeLessThanOrEqual(220 - 16);
-    expect(lines[1].endsWith('…')).toBe(true);
+  it('shows the whole title, wrapped to the balloon width, never cut', () => {
+    const title = 'Copom reduz a taxa Selic para 13,75% ao ano e indica novos cortes nas próximas reuniões do comitê';
+    const lines = wrapTitle(measure, title);
+    expect(lines.length).toBeGreaterThan(2);
+    for (const l of lines) expect(measure(l)).toBeLessThanOrEqual(BALLOON_MAX_W - 16);
+    expect(lines.join(' ')).toBe(title);
+    expect(lines.join('')).not.toContain('…');
+  });
+
+  it('splits a word wider than the balloon instead of cutting it', () => {
+    const word = 'x'.repeat(100);
+    expect(wrapTitle(measure, word).join('')).toBe(word);
   });
 });
