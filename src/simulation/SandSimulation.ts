@@ -90,6 +90,7 @@ export class SandSimulation {
   private toneTimer = 0;
   private relayoutTimer?: ReturnType<typeof setTimeout>;
   private layoutDirty = false;
+  private lastRelayout = 0;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -180,8 +181,15 @@ export class SandSimulation {
     if (Math.abs(k - kx) > 0.01) this.layoutDirty = true;
     clearTimeout(this.relayoutTimer);
     if (this.layoutDirty) {
+      // Keep it clean while dragging too (≈20–40 ms per re-pour), and once more at the end.
+      const now = performance.now();
+      if (now - this.lastRelayout > 300) {
+        this.lastRelayout = now;
+        this.engine.relayout();
+      }
       this.relayoutTimer = setTimeout(() => {
         this.layoutDirty = false;
+        this.lastRelayout = performance.now();
         this.engine.relayout();
       }, 250);
     }

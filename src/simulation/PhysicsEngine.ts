@@ -389,7 +389,46 @@ export class PhysicsEngine {
     this.actives = keep;
   }
 
+  /** Push a grain completely out of every settled grain it touches (statics never move). */
+  private separateFromStatics(p: Particle): void {
+    for (let it = 0; it < 6; it++) {
+      let moved = false;
+      this.staticGrid.query(p.x, p.y, p.r + this.maxR, (q) => {
+        const dx = p.x - q.x;
+        const dy = p.y - q.y;
+        const rr = p.r + q.r;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= rr * rr * 0.999) return;
+        const d = Math.sqrt(d2) || 1e-6;
+        const push = rr - d;
+        p.x += (dx / d) * push;
+        p.y += (d2 === 0 ? -1 : dy / d) * push;
+        moved = true;
+      });
+      p.x = Math.min(this.width - p.r, Math.max(p.r, p.x));
+      if (p.y > this.height - p.r) p.y = this.height - p.r;
+      if (!moved) return;
+    }
+    // Squeezed into a gap narrower than itself: like real sand, it rests on top of the gap.
+    for (let i = 0; i < 400 && this.touchesDeep(p, 0.98); i++) p.y -= 0.5;
+  }
+
+  private touchesDeep(p: Particle, factor: number): boolean {
+    let hit = false;
+    this.staticGrid.query(p.x, p.y, p.r + this.maxR, (q) => {
+      if (!hit && q !== p && Math.hypot(p.x - q.x, p.y - q.y) < (p.r + q.r) * factor) hit = true;
+    });
+    return hit;
+  }
+
+  /** Is a settled grain sunk into another one (more than slight contact)? */
+  private overlapsStatic(s: Particle): boolean {
+    return this.touchesDeep(s, 0.9);
+  }
+
   private deposit(p: Particle): void {
+    // Never settle inside another grain: residual overlaps from crowded contacts are removed first.
+    this.separateFromStatics(p);
     p.state = 'deposited';
     p.vx = p.vy = 0;
     p.restTimer = 0;
@@ -511,14 +550,14 @@ export class PhysicsEngine {
     const woken: Particle[] = [];
     for (const s of this.disturbed.splice(0)) {
       if (this.actives.length >= this.config.maxActive) break;
-      if (this.statics.has(s) && !this.hasSupport(s, true)) {
+      if (this.statics.has(s) && (this.overlapsStatic(s) || !this.hasSupport(s, true))) {
         this.wake(s, 0, 0);
         woken.push(s);
       }
     }
     for (const s of sample) {
       if (this.actives.length >= this.config.maxActive) break;
-      if (this.statics.has(s) && !this.hasSupport(s)) {
+      if (this.statics.has(s) && (this.overlapsStatic(s) || !this.hasSupport(s))) {
         this.wake(s, (Math.random() < 0.5 ? -1 : 1) * 10, 0);
         woken.push(s);
       }
@@ -558,6 +597,8 @@ export class PhysicsEngine {
         if (Math.abs(s.targetR - s.r) < 0.01) s.r = s.targetR;
         s.mass = s.r * s.r;
         changed = true;
+        // Grew or shrank in place (impact recalculated): re-check for overlaps once it's done.
+        if (s.r === s.targetR) this.disturbed.push(s);
       }
     }
     if (changed) this.dirty = true;

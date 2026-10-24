@@ -186,6 +186,14 @@ describe('physics engine', () => {
     for (let i = 0; i < 60 * 60; i++) e.step(dt);
     expect(e.actives.length).toBeLessThan(10);
     expect(e.bedHeightPx).toBeLessThanOrEqual(800 * 0.45);
+    // No grain may ever rest inside another one.
+    const st = [...e.statics];
+    for (let i = 0; i < st.length; i++)
+      for (let j = i + 1; j < st.length; j++) {
+        const g = st[i];
+        const h = st[j];
+        expect(Math.hypot(g.x - h.x, g.y - h.y)).toBeGreaterThan((g.r + h.r) * 0.9);
+      }
     for (const p of e.statics) {
       expect(p.x).toBeGreaterThanOrEqual(p.r - 0.5);
       expect(p.x).toBeLessThanOrEqual(1280 - p.r + 0.5);
