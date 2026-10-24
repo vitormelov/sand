@@ -606,16 +606,45 @@ export class PhysicsEngine {
 
   // -------------------------------------------------------------- compaction
 
-  private measureBed(): void {
-    const bin = 24;
+  /**
+   * Optional per-column limit for the bed surface (y in px, one value per `ceilingBin` px),
+   * e.g. the bottom edge of the background map. When set, it replaces maxPileFraction.
+   */
+  ceiling: Float32Array | null = null;
+  ceilingBin = 12;
+  /** Surface of the settled sand per column of `ceilingBin` px (y of the highest grain edge). */
+  surface = new Float32Array(0);
+  /** How far the bed rises over the ceiling, robustly (85th percentile), in px. */
+  private overflow = 0;
+
+  setCeiling(ceiling: Float32Array | null, bin: number): void {
+    this.ceiling = ceiling;
+    this.ceilingBin = bin;
+    this.bedTimer = 0;
+  }
+
+  measureBed(): void {
+    const bin = this.ceilingBin;
     const bins = Math.max(1, Math.ceil(this.width / bin));
-    const tops = new Float32Array(bins).fill(this.height);
+    const tops = this.surface.length === bins ? this.surface.fill(this.height) : new Float32Array(bins).fill(this.height);
     for (const s of this.statics) {
-      const i = Math.min(bins - 1, Math.max(0, (s.x / bin) | 0));
-      if (s.y - s.r < tops[i]) tops[i] = s.y - s.r;
+      // The circle's own outline, so a big grain counts over every column it spans.
+      const from = Math.max(0, Math.floor((s.x - s.r) / bin));
+      const to = Math.min(bins - 1, Math.floor((s.x + s.r) / bin));
+      for (let i = from; i <= to; i++) {
+        const dx = Math.min(Math.abs((i + 0.5) * bin - s.x), s.r);
+        const top = s.y - Math.sqrt(s.r * s.r - dx * dx);
+        if (top < tops[i]) tops[i] = top;
+      }
     }
+    this.surface = tops;
     const heights = Array.from(tops, (t) => this.height - t).sort((a, b) => a - b);
     this.bedHeight = heights[Math.floor(heights.length * 0.8)] ?? 0;
+    const c = this.ceiling;
+    if (c && c.length === bins) {
+      const over = Array.from(tops, (t, i) => c[i] - t).sort((a, b) => a - b);
+      this.overflow = over[Math.floor(over.length * 0.85)] ?? 0;
+    } else this.overflow = 0;
   }
 
   /** Seconds left in which a resize may not trigger sinking (the user may be about to resize back). */
@@ -631,11 +660,13 @@ export class PhysicsEngine {
       this.resizeGrace -= dt;
       return;
     }
-    const tooTall = this.bedHeight > this.config.maxPileFraction * this.height;
+    const shaped = !!this.ceiling && this.ceiling.length === this.surface.length;
+    // With a ceiling, the sand is "too tall" once a good part of it rises over the line.
+    const tooTall = shaped ? this.overflow > 6 : this.bedHeight > this.config.maxPileFraction * this.height;
     const tooMany = this.statics.size > this.config.maxStatic;
     if (tooTall || tooMany) {
       // Sink faster the further the bed is over its limits (e.g. a big backlog of large grains).
-      const heightOver = this.bedHeight / (this.config.maxPileFraction * this.height) - 1;
+      const heightOver = shaped ? this.overflow / 60 : this.bedHeight / (this.config.maxPileFraction * this.height) - 1;
       const countOver = this.statics.size / this.config.maxStatic - 1;
       const urgency = Math.min(8, 1 + 12 * Math.max(0, heightOver, countOver));
       this.sinkAccum += SINK_SPEED * urgency * dt;

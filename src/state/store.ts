@@ -71,17 +71,27 @@ export class SandStore {
   attachSink(sink: SpawnSink | undefined): void {
     this.sink = sink;
     if (!sink) return;
-    const sorted = [...this.events.values()].sort((a, b) => Date.parse(a.firstSeenAt) - Date.parse(b.firstSeenAt));
-    for (const e of sorted) this.spawnAll(e, this.impacts.get(e.id) ?? this.score(e), true);
+    this.pour([...this.events.values()]);
   }
 
   private spawn(...args: Parameters<SpawnSink['enqueue']>): void {
     this.sink?.enqueue(...args);
   }
 
-  private spawnAll(e: NewsEvent, r: ImpactResult, backlog: boolean): void {
-    this.spawn({ eventId: e.id, impact: r.score, critical: isCritical(r), ...timing(e) }, backlog);
-    for (const d of e.developments) this.spawn({ eventId: e.id, developmentId: d.id, impact: r.score, critical: false, ...timing(e, d.at) }, backlog);
+  /**
+   * Queue the grains of many events at once (snapshot, new sink, source switched back on).
+   * Every grain — events and their developments — is ordered by when its news happened,
+   * oldest first, so the first fall builds the bed with old news below and new on top.
+   */
+  private pour(events: NewsEvent[]): void {
+    const reqs: Parameters<SpawnSink['enqueue']>[0][] = [];
+    for (const e of events) {
+      const r = this.impacts.get(e.id) ?? this.score(e);
+      reqs.push({ eventId: e.id, impact: r.score, critical: isCritical(r), ...timing(e) });
+      for (const d of e.developments) reqs.push({ eventId: e.id, developmentId: d.id, impact: r.score, critical: false, ...timing(e, d.at) });
+    }
+    reqs.sort((a, b) => (a.newsAt ?? 0) - (b.newsAt ?? 0));
+    for (const req of reqs) this.spawn(req, true);
   }
 
   // --- source filter ----------------------------------------------------------
@@ -100,8 +110,8 @@ export class SandStore {
   }
 
   private refilter(): void {
-    const sorted = [...this.all.values()].sort((a, b) => Date.parse(a.firstSeenAt) - Date.parse(b.firstSeenAt));
-    for (const e of sorted) {
+    const back: NewsEvent[] = [];
+    for (const e of this.all.values()) {
       const shown = this.events.has(e.id);
       if (this.isHidden(e)) {
         if (shown) {
@@ -110,9 +120,10 @@ export class SandStore {
         }
       } else if (!shown) {
         this.events.set(e.id, e);
-        this.spawnAll(e, this.impacts.get(e.id) ?? this.score(e), true);
+        back.push(e);
       }
     }
+    this.pour(back);
     this.set({});
   }
 
@@ -153,15 +164,15 @@ export class SandStore {
   applySnapshot(events: NewsEvent[], status: StreamStatus): void {
     // Oldest first, so the newest grains land on top of the bed.
     this.learnSources(status);
-    const sorted = [...events].sort((a, b) => Date.parse(a.firstSeenAt) - Date.parse(b.firstSeenAt));
-    for (const e of sorted) {
+    const fresh: NewsEvent[] = [];
+    for (const e of events) {
       this.all.set(e.id, e);
-      const r = this.score(e);
+      this.score(e);
       if (this.isHidden(e)) continue;
-      const known = this.events.has(e.id);
+      if (!this.events.has(e.id)) fresh.push(e);
       this.events.set(e.id, e);
-      if (!known) this.spawnAll(e, r, true);
     }
+    this.pour(fresh);
     this.set({ status, snapshotLoaded: true, connection: 'open' });
   }
 

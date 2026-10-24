@@ -3,6 +3,8 @@ import { createParticle, type Particle } from './Particle';
 import { DEFAULT_PHYSICS, PhysicsEngine } from './PhysicsEngine';
 import { ParticleRenderer } from './ParticleRenderer';
 import { GrainSound } from './sound';
+import { CEILING_BIN, mapCeiling } from '../map/terrain';
+import { loadWorld, type Lines } from '../map/worldData';
 
 export interface SimSettings {
   gravity: number;
@@ -12,6 +14,8 @@ export interface SimSettings {
   reducedMotion: boolean;
   sound: boolean;
   theme?: 'light' | 'dark';
+  /** Keep the sand under the background map's bottom edge (on when the map is shown). */
+  terrain?: boolean;
 }
 
 export interface SpawnRequest {
@@ -97,6 +101,7 @@ export class SandSimulation {
   private relayoutTimer?: ReturnType<typeof setTimeout>;
   private layoutDirty = false;
   private lastRelayout = 0;
+  private world: Lines[] | null = null;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -108,6 +113,7 @@ export class SandSimulation {
     this.applySettings();
     this.renderer.setTheme(settings.theme ?? 'light');
     this.renderer.resize(width, height, this.dpr);
+    this.updateCeiling();
     this.engine.onDeposit = (p) => {
       if (this.settings.sound && p.r >= 2.4 && !this.settings.reducedMotion) this.sound.tick(p.r);
     };
@@ -142,6 +148,26 @@ export class SandSimulation {
     }
     this.applySettings();
     if (next.sizeScale != null && next.sizeScale !== prevScale) this.rescaleAll();
+    if (next.terrain !== undefined) this.updateCeiling();
+  }
+
+  /** The line the sand keeps under follows the map, so it is recomputed with the viewport. */
+  private updateCeiling(): void {
+    if (!this.settings.terrain) {
+      this.engine.setCeiling(null, CEILING_BIN);
+      return;
+    }
+    if (!this.world) {
+      loadWorld().then(
+        (d) => {
+          this.world = [d.coast, d.borders];
+          this.updateCeiling();
+        },
+        () => undefined, // no map, no line: the default pile height applies
+      );
+      return;
+    }
+    this.engine.setCeiling(mapCeiling(this.world, this.engine.width, this.engine.height), CEILING_BIN);
   }
 
   /** Grains ease to the size their impact implies at the current scale. */
@@ -188,6 +214,7 @@ export class SandSimulation {
     this.engine.resize(width, height, k);
     this.renderer.resize(width, height, this.dpr);
     this.applySettings();
+    this.updateCeiling();
     // Only when the size limits kick in (k ≠ width ratio) does the shape change; then
     // re-pour the sand once the user stops resizing, so nothing overlaps.
     if (Math.abs(k - kx) > 0.01) this.layoutDirty = true;
@@ -223,9 +250,11 @@ export class SandSimulation {
     this.spawned.add(key);
     this.queue.push({ ...req, backlog });
     if (this.queue.length > MAX_QUEUE) {
-      // After long absences, the least impactful backlog is shown only in the list, not as grains.
-      this.queue.sort((a, b) => b.impact - a.impact);
-      this.queue.length = MAX_QUEUE;
+      // After long absences, the least impactful backlog is shown only in the list, not as
+      // grains. The rest keeps its order (oldest first), so newer news still lands on top.
+      const cut = [...this.queue].sort((a, b) => b.impact - a.impact)[MAX_QUEUE - 1].impact;
+      let keepAtCut = MAX_QUEUE - this.queue.filter((q) => q.impact > cut).length;
+      this.queue = this.queue.filter((q) => q.impact > cut || (q.impact === cut && keepAtCut-- > 0));
     }
   }
 
@@ -319,9 +348,8 @@ export class SandSimulation {
     const x =
       req.x != null
         ? req.x * w
-        : Math.random() < 0.55
-          ? wander * w + (Math.random() - 0.5) * w * 0.18
-          : Math.random() * w;
+        : (this.roomyX(r, wander) ??
+          (Math.random() < 0.55 ? wander * w + (Math.random() - 0.5) * w * 0.18 : Math.random() * w));
     const p = createParticle({
       eventId: req.eventId,
       developmentId: req.developmentId,
@@ -344,6 +372,59 @@ export class SandSimulation {
     if (p.critical) this.critical.push(p);
     if (this.settings.reducedMotion) this.engine.dropInstant(p);
     else this.engine.add(p);
+  }
+
+  /**
+   * With a ceiling (the map's bottom edge), drop the grain where the sand still has room under
+   * it: the open middle first, then the oceans and the sides as the bed fills up. Layers grow
+   * evenly, so newer news ends up above older news. Undefined when there is no ceiling.
+   */
+  private roomyX(r: number, wander: number): number | undefined {
+    const e = this.engine;
+    const c = e.ceiling;
+    const bin = e.ceilingBin;
+    if (!c || c.length !== e.surface.length) return undefined;
+    const room = Float32Array.from(e.surface, (t, i) => t - c[i]);
+    // Grains still in the air will take their share where they are heading (a grain of radius r
+    // spread over ~3r of width raises the surface by about r).
+    for (const a of e.actives) {
+      const from = Math.max(0, Math.floor((a.x - a.r * 1.5) / bin));
+      const to = Math.min(room.length - 1, Math.floor((a.x + a.r * 1.5) / bin));
+      for (let i = from; i <= to; i++) room[i] -= a.r;
+    }
+    const half = Math.max(0, Math.ceil((r * 0.7) / bin));
+    const w = e.width;
+    const weights = new Float32Array(room.length);
+    let total = 0;
+    let best = 0;
+    let bestRoom = -Infinity;
+    for (let i = 0; i < room.length; i++) {
+      const x = (i + 0.5) * bin;
+      if (x < r || x > w - r) continue;
+      let m = Infinity;
+      for (let j = Math.max(0, i - half); j <= Math.min(room.length - 1, i + half); j++) m = Math.min(m, room[j]);
+      if (m > bestRoom) {
+        bestRoom = m;
+        best = i;
+      }
+      if (m <= r) continue;
+      // Prefer emptier columns, with a slow wandering bias so the surface forms soft dunes.
+      const dune = 0.75 + 0.25 * Math.cos(((x / w - wander) * Math.PI * 2) / 0.6);
+      weights[i] = Math.pow(m, 1.5) * dune;
+      total += weights[i];
+    }
+    let pick = best;
+    if (total > 0) {
+      let t = Math.random() * total;
+      for (let i = 0; i < weights.length; i++) {
+        t -= weights[i];
+        if (t <= 0 && weights[i] > 0) {
+          pick = i;
+          break;
+        }
+      }
+    }
+    return (pick + 0.5) * bin + (Math.random() - 0.5) * bin;
   }
 
   private isFresh(p: Particle, now: number): boolean {

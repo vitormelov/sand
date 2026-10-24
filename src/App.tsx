@@ -211,8 +211,8 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
   const chromeHidden = prefs.ambient && idle && panel === 'none' && !selected && !hovered && !privacy;
 
   const simSettings: SimSettings = useMemo(
-    () => ({ gravity: prefs.gravity, speed: prefs.speed, sizeScale: prefs.sizeScale, density: prefs.density, reducedMotion, sound: prefs.sound, theme }),
-    [prefs.gravity, prefs.speed, prefs.sizeScale, prefs.density, reducedMotion, prefs.sound, theme],
+    () => ({ gravity: prefs.gravity, speed: prefs.speed, sizeScale: prefs.sizeScale, density: prefs.density, reducedMotion, sound: prefs.sound, theme, terrain: prefs.showMap }),
+    [prefs.gravity, prefs.speed, prefs.sizeScale, prefs.density, reducedMotion, prefs.sound, theme, prefs.showMap],
   );
 
   // Opening a news item (click, list, saved) marks it as seen.
