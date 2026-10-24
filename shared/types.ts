@@ -109,6 +109,10 @@ export interface Analysis {
 
 export type SourceKind = 'official' | 'agency' | 'outlet' | 'aggregator';
 
+/** How sources are grouped in the settings list. */
+export const SOURCE_GROUPS = ['national', 'regional', 'official', 'alerts', 'climate', 'economy', 'sports', 'international', 'aggregators'] as const;
+export type SourceGroup = (typeof SOURCE_GROUPS)[number];
+
 export type RelationKind = 'documented' | 'probable' | 'possible' | 'unconfirmed';
 
 export interface EventRelation {
@@ -157,6 +161,8 @@ export interface NewsEvent {
   expiresAt: string;
   articleCount: number;
   sources: string[];
+  /** Ids of the connectors that covered it (for per-user source filters). */
+  sourceIds?: string[];
   analysis: Analysis;
   verification: Verification;
   relations: EventRelation[];
@@ -171,6 +177,9 @@ export interface SourceStatus {
   id: string;
   name: string;
   kind: SourceKind;
+  group?: SourceGroup;
+  /** The outlet may ask for a subscription to read the full article. */
+  paywall?: boolean;
   health: SourceHealth;
   lastSuccessAt?: string;
   lastAttemptAt?: string;

@@ -96,8 +96,13 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
     [account],
   );
   const [feedback, setFeedback] = useState(loadFeedback);
-  const store = useMemo(() => new SandStore(profile, demo), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const store = useMemo(() => {
+    const s = new SandStore(profile, demo);
+    s.setHiddenSources(profile.hiddenSources ?? []);
+    return s;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const ui = useStoreState(store);
+  useEffect(() => store.setHiddenSources(profile.hiddenSources ?? []), [profile.hiddenSources, store]);
   const simRef = useRef<SandSimulation | null>(null);
   // --- Seen and saved news -------------------------------------------------------
   // Kept in the account (or, in lab/demo, only in this browser).
@@ -394,6 +399,7 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
         <SettingsPanel
           prefs={prefs}
           profile={profile}
+          sources={ui.status?.sources}
           account={account}
           onProfileChange={updateProfile}
           onEditAnswers={() => {

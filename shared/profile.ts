@@ -28,6 +28,8 @@ export interface ProfileAnswers {
   /** Up to 3 other places that matter (family, work, study). */
   places?: UserLocation[];
   avoidTopics?: AvoidTopic[];
+  /** News sources (connector ids) the user switched off. */
+  hiddenSources?: string[];
 }
 
 export interface StoredProfile extends UserProfile, ProfileAnswers {
@@ -157,6 +159,9 @@ export function sanitizeProfile(raw: unknown): StoredProfile {
       ? { occupation: oneOf(r.work.occupation, OCCUPATIONS), hasDebt: bool(r.work.hasDebt), invests: bool(r.work.invests), socialBenefit: bool(r.work.socialBenefit) }
       : undefined,
     places: Array.isArray(r.places) ? r.places.map(sanitizeLocation).filter((x): x is UserLocation => !!x).slice(0, 3) : undefined,
+    hiddenSources: Array.isArray(r.hiddenSources)
+      ? [...new Set(r.hiddenSources.filter((s: unknown): s is string => typeof s === 'string' && /^[a-z0-9-]{1,40}$/.test(s)))].slice(0, 50)
+      : undefined,
     avoidTopics: Array.isArray(r.avoidTopics) ? [...new Set(r.avoidTopics.filter((t: unknown) => oneOf(t, AVOID_TOPICS)))] as AvoidTopic[] : undefined,
   };
 }

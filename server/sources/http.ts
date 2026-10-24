@@ -10,6 +10,28 @@ export interface HttpResponse {
 
 const MAX_BYTES = 4 * 1024 * 1024;
 
+/**
+ * Decode using the declared charset (header, then XML declaration). Several Brazilian feeds
+ * (Folha, UOL) send ISO-8859-1 without saying so: when the bytes are not valid UTF-8, fall back
+ * to Windows-1252 (a superset of Latin-1).
+ */
+export function decodeBody(bytes: Uint8Array, contentType: string | null): string {
+  const head = new TextDecoder('latin1').decode(bytes.subarray(0, 200));
+  const declared = /charset=["']?([\w-]+)/i.exec(contentType ?? '')?.[1] ?? /<\?xml[^>]*encoding=["']([\w-]+)["']/i.exec(head)?.[1];
+  if (declared && !/^utf-?8$/i.test(declared)) {
+    try {
+      return new TextDecoder(declared).decode(bytes);
+    } catch {
+      /* unknown label (e.g. "pt-br"): sniff below */
+    }
+  }
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return new TextDecoder('windows-1252').decode(bytes);
+  }
+}
+
 /** GET with timeout, conditional headers and a response size limit. */
 export async function httpGet(
   url: string,
@@ -41,7 +63,8 @@ export async function httpGet(
   }
   const len = Number(res.headers.get('content-length') ?? 0);
   if (len > MAX_BYTES) throw new HttpError(res.status, `response too large (${len} bytes)`);
-  const text = await res.text();
-  if (text.length > MAX_BYTES * 2) throw new HttpError(res.status, 'response too large');
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  if (bytes.length > MAX_BYTES * 2) throw new HttpError(res.status, 'response too large');
+  const text = decodeBody(bytes, res.headers.get('content-type'));
   return { status: res.status, text, state };
 }

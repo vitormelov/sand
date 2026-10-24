@@ -2,7 +2,7 @@ import { XMLParser } from 'fast-xml-parser';
 import type { RawItem } from '../types';
 import { httpGet } from './http';
 import type { FetchContext, FetchResult, SourceConnector } from './types';
-import type { SourceKind } from '../../shared/types';
+import type { GeoRef, SourceGroup, SourceKind } from '../../shared/types';
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -49,6 +49,8 @@ export function parseFeed(xml: string): { items: Array<Record<string, unknown>>;
   return { items, rawItems };
 }
 
+const BRASIL: GeoRef = { name: 'Brasil', level: 'country', countryCode: 'BR', regions: ['south_america'], confidence: 0.9, via: 'source-metadata' };
+
 export interface RssFeedConfig {
   id: string;
   name: string;
@@ -58,6 +60,10 @@ export interface RssFeedConfig {
   country?: string;
   language?: string;
   homepage?: string;
+  group?: SourceGroup;
+  paywall?: boolean;
+  /** Federal bodies (Banco Central, Congress, Receita): their news concerns the whole country. */
+  national?: boolean;
   intervalMs?: number;
 }
 
@@ -74,7 +80,8 @@ export function rssConnector(cfg: RssFeedConfig): SourceConnector {
       });
       if (res.status === 304) return { items: [], notModified: true, state: res.state };
       const { rawItems } = parseFeed(res.text);
-      return { items: rawItems.slice(0, 80), state: res.state };
+      const items = cfg.national ? rawItems.map((i) => ({ ...i, hints: { ...i.hints, locations: [BRASIL], affectedScope: 'national' as const } })) : rawItems;
+      return { items: items.slice(0, 80), state: res.state };
     },
   };
 }

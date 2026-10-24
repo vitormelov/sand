@@ -114,6 +114,7 @@ export class Pipeline {
       expiresAt: new Date(Math.min(base, now) + this.opts.retentionHours * 3_600_000).toISOString(),
       articleCount: 1,
       sources: [art.sourceName],
+      sourceIds: [art.sourceId],
       analysis,
       verification: art.sourceKind === 'official' ? 'official' : 'single_source',
       relations: [],
@@ -146,6 +147,7 @@ export class Pipeline {
     const newSource = !event.sources.includes(art.sourceName);
     event.articleCount += revisionChanged ? 0 : 1;
     if (newSource) event.sources = [...event.sources, art.sourceName].slice(0, 12);
+    if (!event.sourceIds?.includes(art.sourceId)) event.sourceIds = [...(event.sourceIds ?? []), art.sourceId].slice(0, 12);
     if (event.verification === 'single_source' && newSource) event.verification = 'corroborated';
     event.updatedAt = nowIso;
 

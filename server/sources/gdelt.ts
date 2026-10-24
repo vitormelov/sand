@@ -51,6 +51,7 @@ export function gdeltConnector(queries: string[], timespan = '30min', maxRecords
     id: 'gdelt',
     name: 'GDELT Project',
     kind: 'aggregator',
+    group: 'aggregators',
     reliability: 0.55,
     homepage: 'https://www.gdeltproject.org/',
     intervalMs: 15 * 60_000,

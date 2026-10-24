@@ -12,6 +12,7 @@ export function newsApiConnector(apiKey: string | undefined, params: string): So
     id: 'newsapi',
     name: 'NewsAPI',
     kind: 'aggregator',
+    group: 'aggregators',
     reliability: 0.65,
     homepage: 'https://newsapi.org/',
     intervalMs: 30 * 60_000,

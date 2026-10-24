@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { StoredProfile } from '../../shared/profile';
+import { SOURCE_GROUPS, type SourceGroup, type SourceKind, type SourceStatus } from '../../shared/types';
 import type { AccountProps } from '../App';
 import { ApiError, changePassword, deleteAccount, ERROR_TEXT } from '../services/account';
 import type { Prefs } from '../services/storage';
@@ -9,6 +10,8 @@ import { IconClose } from './icons';
 interface Props {
   prefs: Prefs;
   profile: StoredProfile;
+  /** Every source the server knows, with its current health. */
+  sources?: SourceStatus[];
   account?: AccountProps;
   onProfileChange: (p: StoredProfile) => void;
   onEditAnswers: () => void;
@@ -28,15 +31,112 @@ function Range(props: { label: string; value: number; min: number; max: number; 
   );
 }
 
-function Toggle(props: { label: string; hint?: string; checked: boolean; onChange: (v: boolean) => void }) {
+function Toggle(props: { label: string; hint?: string; checked: boolean; disabled?: boolean; onChange: (v: boolean) => void }) {
   return (
-    <label className="toggle">
+    <label className={props.disabled ? 'toggle is-disabled' : 'toggle'}>
       <span>
         {props.label}
         {props.hint && <small>{props.hint}</small>}
       </span>
-      <input type="checkbox" role="switch" checked={props.checked} onChange={(e) => props.onChange(e.target.checked)} />
+      <input type="checkbox" role="switch" checked={props.checked} disabled={props.disabled} onChange={(e) => props.onChange(e.target.checked)} />
     </label>
+  );
+}
+
+const KIND_LABEL: Record<SourceKind, string> = {
+  official: 'Órgão oficial',
+  agency: 'Agência de notícias',
+  outlet: 'Veículo de imprensa',
+  aggregator: 'Agregador',
+};
+
+const GROUP_LABEL: Record<SourceGroup, string> = {
+  national: 'Nacionais',
+  regional: 'Regionais (por estado)',
+  official: 'Órgãos oficiais',
+  alerts: 'Alertas e monitoramento',
+  climate: 'Clima e meio ambiente',
+  economy: 'Economia',
+  sports: 'Esporte',
+  international: 'Internacionais',
+  aggregators: 'Agregadores',
+};
+
+function sourceHint(s: SourceStatus): string {
+  const kind = `${KIND_LABEL[s.kind]}${s.paywall ? ' · pode exigir assinatura' : ''}`;
+  if (s.health === 'disabled') return `${kind} · desativada no servidor${s.note ? ` (${s.note})` : ''}`;
+  if (s.health === 'down') return `${kind} · fora do ar no momento`;
+  if (s.health === 'degraded') return `${kind} · instável`;
+  if (s.health === 'pending') return `${kind} · aguardando a primeira leitura`;
+  return kind;
+}
+
+/** Per-user on/off switch for each news source. */
+function SourcesSection({ sources, hidden, onChange }: { sources?: SourceStatus[]; hidden: string[]; onChange: (hidden: string[]) => void }) {
+  if (!sources?.length) {
+    return (
+      <section className="sheet__section">
+        <h3>Fontes de notícias</h3>
+        <p className="hint">A lista de fontes aparece quando a conexão com o servidor estiver aberta.</p>
+      </section>
+    );
+  }
+  const off = new Set(hidden);
+  const usable = sources.filter((s) => s.health !== 'disabled');
+  const allOff = usable.length > 0 && usable.every((s) => off.has(s.id));
+  const groups = [...SOURCE_GROUPS, undefined]
+    .map((g) => ({ group: g, list: sources.filter((s) => (s.group && SOURCE_GROUPS.includes(s.group) ? s.group : undefined) === g) }))
+    .filter((g) => g.list.length > 0);
+  const setGroup = (list: SourceStatus[], on: boolean) => {
+    const ids = new Set(list.filter((s) => s.health !== 'disabled').map((s) => s.id));
+    onChange(on ? hidden.filter((id) => !ids.has(id)) : [...new Set([...hidden, ...ids])]);
+  };
+  return (
+    <section className="sheet__section">
+      <h3>Fontes de notícias</h3>
+      {groups.map(({ group, list }) => {
+        const live = list.filter((s) => s.health !== 'disabled');
+        const onCount = live.filter((s) => !off.has(s.id)).length;
+        return (
+          <details key={group ?? 'other'} className="source-group">
+            <summary>
+              <span>{group ? GROUP_LABEL[group] : 'Outras'}</span>
+              <small>{live.length ? `${onCount} de ${live.length} ligada${live.length === 1 ? '' : 's'}` : 'desativadas no servidor'}</small>
+            </summary>
+            {live.length > 1 && (
+              <div className="row__actions source-group__actions">
+                <button className="link-btn" onClick={() => setGroup(list, true)} disabled={onCount === live.length}>
+                  Ligar todas
+                </button>
+                <button className="link-btn" onClick={() => setGroup(list, false)} disabled={onCount === 0}>
+                  Desligar todas
+                </button>
+              </div>
+            )}
+            {list.map((s) => (
+              <Toggle
+                key={s.id}
+                label={s.name}
+                hint={sourceHint(s)}
+                checked={s.health !== 'disabled' && !off.has(s.id)}
+                disabled={s.health === 'disabled'}
+                onChange={(on) => onChange(on ? hidden.filter((id) => id !== s.id) : [...hidden, s.id])}
+              />
+            ))}
+          </details>
+        );
+      })}
+      {hidden.length > 0 && (
+        <button className="link-btn" onClick={() => onChange([])}>
+          Ligar todas as fontes
+        </button>
+      )}
+      <p className="hint">
+        {allOff
+          ? 'Todas as fontes estão desligadas: nenhuma notícia nova vai cair.'
+          : 'Uma notícia coberta por várias fontes continua aparecendo enquanto ao menos uma delas estiver ligada.'}
+      </p>
+    </section>
   );
 }
 
@@ -128,7 +228,7 @@ function AccountSection({ account }: { account: AccountProps }) {
   );
 }
 
-export function SettingsPanel({ prefs, profile, account, onProfileChange, onEditAnswers, onChange, onClearAll, onClose, onPrivacy }: Props) {
+export function SettingsPanel({ prefs, profile, sources, account, onProfileChange, onEditAnswers, onChange, onClearAll, onClose, onPrivacy }: Props) {
   const [editingCity, setEditingCity] = useState(!profile.location);
   const [confirmClear, setConfirmClear] = useState(false);
   const headRef = useRef<HTMLHeadingElement>(null);
@@ -223,6 +323,8 @@ export function SettingsPanel({ prefs, profile, account, onProfileChange, onEdit
         <Toggle label="Avisos de situações críticas" hint="Uma linha discreta no topo quando houver risco imediato perto de você." checked={prefs.criticalAlerts} onChange={(v) => onChange({ criticalAlerts: v })} />
         <Toggle label="Som" hint="Um toque quase inaudível quando grãos maiores assentam." checked={prefs.sound} onChange={(v) => onChange({ sound: v })} />
       </section>
+
+      <SourcesSection sources={sources} hidden={profile.hiddenSources ?? []} onChange={(hiddenSources) => onProfileChange({ ...profile, hiddenSources })} />
 
       {account && <AccountSection account={account} />}
 

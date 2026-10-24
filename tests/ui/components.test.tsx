@@ -106,6 +106,23 @@ describe('SettingsPanel', () => {
     expect(onProfileChange).toHaveBeenCalledWith(expect.objectContaining({ location: expect.objectContaining({ name: 'Recife', admin1: 'PE' }), locationSource: 'manual' }));
   });
 
+  it('lists every source and switches them on/off per user', async () => {
+    const onProfileChange = vi.fn();
+    const sources = [
+      { id: 'g1', name: 'g1', kind: 'outlet' as const, health: 'ok' as const },
+      { id: 'usgs', name: 'USGS Earthquakes', kind: 'official' as const, health: 'ok' as const },
+      { id: 'newsapi', name: 'NewsAPI', kind: 'aggregator' as const, health: 'disabled' as const, note: 'sem chave' },
+    ];
+    const { rerender } = render(<SettingsPanel prefs={{ ...DEFAULT_PREFS }} profile={profile} sources={sources} onProfileChange={onProfileChange} onEditAnswers={noop} onChange={noop} onClose={noop} onClearAll={noop} onPrivacy={noop} />);
+    expect(screen.getByRole('switch', { name: /NewsAPI/ })).toBeDisabled();
+    await userEvent.click(screen.getByRole('switch', { name: /USGS/ }));
+    expect(onProfileChange).toHaveBeenLastCalledWith(expect.objectContaining({ hiddenSources: ['usgs'] }));
+    rerender(<SettingsPanel prefs={{ ...DEFAULT_PREFS }} profile={{ ...profile, hiddenSources: ['usgs'] }} sources={sources} onProfileChange={onProfileChange} onEditAnswers={noop} onChange={noop} onClose={noop} onClearAll={noop} onPrivacy={noop} />);
+    expect(screen.getByRole('switch', { name: /USGS/ })).not.toBeChecked();
+    await userEvent.click(screen.getByRole('button', { name: 'Ligar todas as fontes' }));
+    expect(onProfileChange).toHaveBeenLastCalledWith(expect.objectContaining({ hiddenSources: [] }));
+  });
+
   it('adjusts visual preferences: reduced motion, density, indicators, map', async () => {
     const onChange = vi.fn();
     render(<SettingsPanel prefs={{ ...DEFAULT_PREFS }} profile={profile} onProfileChange={noop} onEditAnswers={noop} onChange={onChange} onClose={noop} onClearAll={noop} onPrivacy={noop} />);

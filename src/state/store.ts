@@ -30,7 +30,12 @@ export interface UiState {
  * React subscribes to coarse changes; the simulation is fed through a sink.
  */
 export class SandStore {
+  /** Events shown to this user (every known event minus those from switched-off sources). */
   readonly events = new Map<string, NewsEvent>();
+  private all = new Map<string, NewsEvent>();
+  private hiddenSources = new Set<string>();
+  /** Source name → id, for events stored before they carried `sourceIds`. */
+  private sourceIdByName = new Map<string, string>();
   readonly impacts = new Map<string, ImpactResult>();
   private listeners = new Set<() => void>();
   private state: UiState;
@@ -67,15 +72,52 @@ export class SandStore {
     this.sink = sink;
     if (!sink) return;
     const sorted = [...this.events.values()].sort((a, b) => Date.parse(a.firstSeenAt) - Date.parse(b.firstSeenAt));
-    for (const e of sorted) {
-      const r = this.impacts.get(e.id) ?? this.score(e);
-      sink.enqueue({ eventId: e.id, impact: r.score, critical: isCritical(r), ...timing(e) }, true);
-      for (const d of e.developments) sink.enqueue({ eventId: e.id, developmentId: d.id, impact: r.score, critical: false, ...timing(e, d.at) }, true);
-    }
+    for (const e of sorted) this.spawnAll(e, this.impacts.get(e.id) ?? this.score(e), true);
   }
 
   private spawn(...args: Parameters<SpawnSink['enqueue']>): void {
     this.sink?.enqueue(...args);
+  }
+
+  private spawnAll(e: NewsEvent, r: ImpactResult, backlog: boolean): void {
+    this.spawn({ eventId: e.id, impact: r.score, critical: isCritical(r), ...timing(e) }, backlog);
+    for (const d of e.developments) this.spawn({ eventId: e.id, developmentId: d.id, impact: r.score, critical: false, ...timing(e, d.at) }, backlog);
+  }
+
+  // --- source filter ----------------------------------------------------------
+  /** Hidden when every source that covered it is switched off. */
+  isHidden(e: NewsEvent): boolean {
+    if (!this.hiddenSources.size) return false;
+    const ids = e.sourceIds?.length ? e.sourceIds : e.sources.map((n) => this.sourceIdByName.get(n)).filter((x): x is string => !!x);
+    return ids.length > 0 && ids.every((id) => this.hiddenSources.has(id));
+  }
+
+  setHiddenSources(ids: Iterable<string>): void {
+    const next = new Set(ids);
+    if (next.size === this.hiddenSources.size && [...next].every((id) => this.hiddenSources.has(id))) return;
+    this.hiddenSources = next;
+    this.refilter();
+  }
+
+  private refilter(): void {
+    const sorted = [...this.all.values()].sort((a, b) => Date.parse(a.firstSeenAt) - Date.parse(b.firstSeenAt));
+    for (const e of sorted) {
+      const shown = this.events.has(e.id);
+      if (this.isHidden(e)) {
+        if (shown) {
+          this.events.delete(e.id);
+          this.sink?.forgetEvent(e.id);
+        }
+      } else if (!shown) {
+        this.events.set(e.id, e);
+        this.spawnAll(e, this.impacts.get(e.id) ?? this.score(e), true);
+      }
+    }
+    this.set({});
+  }
+
+  private learnSources(status: StreamStatus): void {
+    for (const s of status.sources) this.sourceIdByName.set(s.name, s.id);
   }
 
   // --- impact ---------------------------------------------------------------
@@ -87,7 +129,7 @@ export class SandStore {
 
   setProfile(profile: UserProfile): void {
     this.profile = profile;
-    for (const e of this.events.values()) {
+    for (const e of this.all.values()) {
       const r = this.score(e);
       this.sink?.updateImpact(e.id, r.score, r.urgent || r.band === 'critical');
     }
@@ -110,24 +152,30 @@ export class SandStore {
 
   applySnapshot(events: NewsEvent[], status: StreamStatus): void {
     // Oldest first, so the newest grains land on top of the bed.
+    this.learnSources(status);
     const sorted = [...events].sort((a, b) => Date.parse(a.firstSeenAt) - Date.parse(b.firstSeenAt));
     for (const e of sorted) {
+      this.all.set(e.id, e);
+      const r = this.score(e);
+      if (this.isHidden(e)) continue;
       const known = this.events.has(e.id);
       this.events.set(e.id, e);
-      const r = this.score(e);
-      if (!known) {
-        this.spawn({ eventId: e.id, impact: r.score, critical: isCritical(r), ...timing(e) }, true);
-        for (const d of e.developments) this.spawn({ eventId: e.id, developmentId: d.id, impact: r.score, critical: false, ...timing(e, d.at) }, true);
-      }
+      if (!known) this.spawnAll(e, r, true);
     }
     this.set({ status, snapshotLoaded: true, connection: 'open' });
   }
 
   applyEvent(msg: StreamEventMessage): void {
     const e = msg.event;
+    this.all.set(e.id, e);
+    const r = this.score(e);
+    if (this.isHidden(e)) {
+      if (this.events.delete(e.id)) this.sink?.forgetEvent(e.id);
+      this.set({});
+      return;
+    }
     const known = this.events.has(e.id);
     this.events.set(e.id, e);
-    const r = this.score(e);
     const now = new Date().toISOString();
     if (!known) {
       this.spawn({ eventId: e.id, impact: r.score, critical: isCritical(r), ...timing(e) });
@@ -148,6 +196,7 @@ export class SandStore {
    * estimate is replaced, and the panel says so explicitly.
    */
   injectLab(e: NewsEvent, opts: { forcedScore?: number; x?: number } = {}): ImpactResult {
+    this.all.set(e.id, e);
     this.events.set(e.id, e);
     let r = this.score(e);
     if (opts.forcedScore != null) {
@@ -163,17 +212,22 @@ export class SandStore {
 
   /** Lab only: forget every event. */
   clearAll(): void {
+    this.all.clear();
     this.events.clear();
     this.impacts.clear();
     this.set({});
   }
 
   applyStatus(status: StreamStatus): void {
+    const before = this.sourceIdByName.size;
+    this.learnSources(status);
+    if (this.hiddenSources.size && this.sourceIdByName.size !== before) this.refilter();
     this.set({ status });
   }
 
   expire(ids: string[]): void {
     for (const id of ids) {
+      this.all.delete(id);
       this.events.delete(id);
       this.impacts.delete(id);
       this.sink?.forgetEvent(id);

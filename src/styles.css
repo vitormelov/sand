@@ -146,7 +146,7 @@ button {
 .demo-badge {
   position: absolute;
   left: max(20px, env(safe-area-inset-left));
-  bottom: max(34px, calc(env(safe-area-inset-bottom) + 24px));
+  top: calc(max(14px, env(safe-area-inset-top)) + 54px);
   background: var(--paper);
   font-size: 11px;
   letter-spacing: 0.08em;
@@ -207,20 +207,20 @@ button {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
+  top: calc(max(14px, env(safe-area-inset-top)) + 32px);
   display: flex;
   flex-wrap: wrap;
   gap: 4px 18px;
-  padding: 0 max(20px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+  padding: 0 max(20px, env(safe-area-inset-right)) 0 max(20px, env(safe-area-inset-left));
   font-size: 11px;
   color: var(--ink-4);
   pointer-events: none;
   font-variant-numeric: tabular-nums;
-  /* Stays legible when the sand bed rises behind it. */
+  /* Stays legible over grains falling past it. */
   text-shadow: 0 0 3px var(--paper), 0 0 6px var(--paper);
 }
 .statusbar__conn {
-  margin-left: auto;
+  margin-left: 0;
 }
 .statusbar__conn--warn {
   color: var(--warn);
@@ -244,7 +244,7 @@ button {
 
 .critical {
   position: absolute;
-  top: max(14px, env(safe-area-inset-top));
+  top: calc(max(14px, env(safe-area-inset-top)) + 40px);
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -400,6 +400,13 @@ button {
   color: var(--ink-2);
   cursor: pointer;
 }
+.toggle.is-disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.toggle.is-disabled input {
+  cursor: default;
+}
 .toggle small {
   display: block;
   color: var(--ink-3);
@@ -447,7 +454,7 @@ button {
 
 .sheet {
   position: absolute;
-  top: 56px;
+  top: 76px;
   right: max(12px, env(safe-area-inset-right));
   bottom: 40px;
   width: min(380px, calc(100vw - 24px));
@@ -601,10 +608,10 @@ button {
 .details--full,
 .details--preview {
   left: 50%;
-  top: 64px;
+  top: 80px;
   transform: translateX(-50%);
   width: min(380px, calc(100vw - 32px));
-  max-height: calc(100vh - 64px - 48px);
+  max-height: calc(100vh - 80px - 32px);
 }
 .details--preview {
   pointer-events: none;
@@ -873,7 +880,7 @@ button {
 
 .lab {
   position: absolute;
-  top: 56px;
+  top: 96px;
   left: max(12px, env(safe-area-inset-left));
   width: min(320px, calc(100vw - 24px));
   max-height: calc(100vh - 110px);
@@ -993,7 +1000,7 @@ button {
 }
 .lab-toggle {
   position: absolute;
-  top: 56px;
+  top: 96px;
   left: 12px;
   border: 1px dashed var(--line-2);
   background: var(--paper);
@@ -1306,4 +1313,79 @@ button.btn {
 .saved__remove {
   justify-self: start;
   font-size: 11.5px;
+}
+
+/* Status line: in the same row as SAND and the icons, centred (second line on narrow screens). */
+.statusbar {
+  top: max(14px, env(safe-area-inset-top));
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  padding: 0;
+}
+.demo-badge {
+  top: calc(max(14px, env(safe-area-inset-top)) + 40px);
+}
+@media (max-width: 860px) {
+  .statusbar {
+    top: calc(max(14px, env(safe-area-inset-top)) + 32px);
+    height: auto;
+    width: calc(100% - 32px);
+    flex-wrap: wrap;
+    white-space: normal;
+    gap: 2px 14px;
+  }
+  .demo-badge,
+  .critical {
+    top: calc(max(14px, env(safe-area-inset-top)) + 62px);
+  }
+}
+
+.source-group {
+  border-top: 1px solid var(--line);
+}
+.source-group:last-of-type {
+  border-bottom: 1px solid var(--line);
+}
+.source-group summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 9px 0;
+  font-size: 13px;
+  color: var(--ink-2);
+  cursor: pointer;
+  list-style: none;
+}
+.source-group summary::-webkit-details-marker {
+  display: none;
+}
+.source-group summary::before {
+  content: '›';
+  display: inline-block;
+  width: 12px;
+  color: var(--ink-3);
+  transition: transform 0.15s;
+}
+.source-group[open] summary::before {
+  transform: rotate(90deg);
+}
+.source-group summary span {
+  flex: 1;
+}
+.source-group summary small {
+  color: var(--ink-3);
+  font-size: 11.5px;
+}
+.source-group__actions {
+  margin: 0 0 4px 12px;
+}
+.source-group .toggle {
+  margin-left: 12px;
 }

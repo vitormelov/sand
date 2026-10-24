@@ -1,0 +1,9 @@
+#EventID|Time|Latitude|Longitude|Depth/km|Author|Catalog|Contributor|ContributorID|MagType|Magnitude|MagAuthor|EventLocationName|EventType
+usp2026utew|2026-10-23T02:45:36.095929|-21.547866821289062|-66.82869720458984|200.30999755859375|cleusa||USP|usp2026utew|mb|3.933676101884261|cleusa|Southern Bolivia|earthquake
+usp2026uszs|2026-10-23T00:08:56.856917|-25.130346298217773|-69.73563385009766|10.0|cleusa||USP|usp2026uszs|mb|4.392817368851693|cleusa|Northern Chile|earthquake
+usp2026usut|2026-10-22T21:37:33.446496|-21.67899513244629|-69.70340728759766|10.0|cleusa||USP|usp2026usut|mb|4.68962578521756|cleusa|Northern Chile|earthquake
+usp2026twuv|2026-10-10T20:41:54.09|-20.793166666666668|-47.64116666666666|0.0|marcelo||USP|usp2026twuv|mR|3.2159716751496275|marcelo|Nuporanga/SP|earthquake
+usp2026ridc|2026-09-04T08:45:38.560855|-12.678315162658691|-50.46002578735352|0.0|JAlexandre||USP|usp2026ridc|mR|3.713396630903363|JAlexandre|Sandolandia/TO|earthquake
+usp2026owdm|2026-07-31T08:14:42.046118|-18.851715087890625|-44.75748062133789|0.0|JAlexandre||USP|usp2026owdm|mR|2.756085737389097|JAlexandre|Felixlandia/MG|earthquake
+usp2026mzud|2026-07-04T20:59:51.501941|-23.51639938354492|-42.8669548034668|0.0|JAlexandre||USP|usp2026mzud|mR|3.0136123715303516|JAlexandre|Plataforma Continental/RJ|earthquake
+usp2026mspe|2026-06-30T22:32:18.856517|-15.68648338317871|-57.73857879638672|0.0|JAlexandre||USP|usp2026mspe|mR|2.8137711478547023|JAlexandre|Curvelandia/MT|earthquake

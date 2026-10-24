@@ -1,5 +1,5 @@
 import { hashString } from '../../shared/text';
-import type { SourceKind } from '../../shared/types';
+import type { SourceGroup, SourceKind } from '../../shared/types';
 import type { NormalizedArticle, RawItem } from '../types';
 
 const TRACKING_PARAMS = /^(utm_.*|fbclid|gclid|mc_cid|mc_eid|cmpid|ref|ref_src|at_.*|ito|ns_.*|xtor|origin|ocid|_ga)$/i;
@@ -76,6 +76,15 @@ export function toPlainText(input: unknown, maxLen = 0): string {
   return s;
 }
 
+const PT_MONTHS: Record<string, string> = { jan: 'Jan', fev: 'Feb', mar: 'Mar', abr: 'Apr', mai: 'May', jun: 'Jun', jul: 'Jul', ago: 'Aug', set: 'Sep', out: 'Oct', nov: 'Nov', dez: 'Dec' };
+
+/** Some Brazilian feeds localize RFC 822 dates ("Sex, 23 Out 2026 07:04:13 +0000"). */
+function ptToEnglishDate(s: string): string {
+  return s
+    .replace(/^[^\d,]{2,4},\s*/, '')
+    .replace(/\b(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-zç]*\.?(?=\s)/i, (m, k: string) => PT_MONTHS[k.toLowerCase()] ?? m);
+}
+
 /** Parse feed dates (RFC 822, ISO 8601, GDELT "20261023T201500Z", epoch ms). Rejects implausible values. */
 export function parseDate(v: unknown, now = Date.now()): string | undefined {
   if (v == null || v === '') return undefined;
@@ -86,6 +95,7 @@ export function parseDate(v: unknown, now = Date.now()): string | undefined {
     const s = String(v).trim();
     const g = /^(\d{4})(\d{2})(\d{2})T?(\d{2})(\d{2})(\d{2})Z?$/.exec(s);
     t = g ? Date.UTC(+g[1], +g[2] - 1, +g[3], +g[4], +g[5], +g[6]) : Date.parse(s);
+    if (!Number.isFinite(t)) t = Date.parse(ptToEnglishDate(s));
   }
   if (!Number.isFinite(t)) return undefined;
   if (t > now + 10 * 60_000) return undefined; // future-dated: not trustworthy
@@ -101,6 +111,8 @@ export interface SourceMeta {
   country?: string;
   language?: string;
   homepage?: string;
+  group?: SourceGroup;
+  paywall?: boolean;
 }
 
 export function normalizeItem(raw: RawItem, source: SourceMeta, fetchedAt: string, now = Date.now()): NormalizedArticle | null {

@@ -247,12 +247,21 @@ export class SandSimulation {
     this.critical = this.critical.filter((p) => p.critical);
   }
 
-  /** Event expired: its grains (already faded by age) leave the sand. */
+  /** Event expired or hidden: its grains leave the sand (and may be poured again later). */
   forgetEvent(eventId: string): void {
     const list = this.byEvent.get(eventId);
-    if (list) for (const p of list) this.engine.release(p);
+    if (list) for (const p of list) {
+      this.engine.release(p);
+      if (p.developmentId) this.spawned.delete(p.developmentId);
+    }
     this.byEvent.delete(eventId);
-    this.critical = this.critical.filter((p) => p.eventId);
+    this.spawned.delete(eventId);
+    this.queue = this.queue.filter((q) => {
+      if (q.eventId !== eventId) return true;
+      this.spawned.delete(q.developmentId ?? q.eventId);
+      return false;
+    });
+    this.critical = this.critical.filter((p) => p.eventId !== eventId);
   }
 
   select(eventId: string | null): void {

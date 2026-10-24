@@ -40,6 +40,8 @@ export class Scheduler {
         id: c.id,
         name: c.name,
         kind: c.kind,
+        group: c.group,
+        paywall: c.paywall,
         health: c.enabled ? 'pending' : 'disabled',
         note: c.enabled ? undefined : c.disabledReason,
       },

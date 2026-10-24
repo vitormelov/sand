@@ -56,31 +56,27 @@ Tudo é opcional; veja [`.env.example`](.env.example). Copie para `.env` (carreg
 
 - `NEWSAPI_KEY` — ativa a NewsAPI (opcional).
 - **IA desligada por padrão**: o SAND funciona só com regras e não gasta tokens. Para ativar a classificação complementar por IA em itens ambíguos é preciso definir **as duas** variáveis, `LLM_ENABLED=true` e `ANTHROPIC_API_KEY` (modelo em `LLM_MODEL`, padrão `claude-opus-5-5`; limite em `LLM_MAX_CALLS_PER_HOUR`). Uma chave existente no ambiente, sozinha, não ativa nada. O custo depende do volume de notícias, não do número de usuários. Só título e resumo da notícia são enviados; nunca dados do usuário.
-- `RSS_FEEDS_JSON`, `GDELT_QUERIES`, `DISABLED_SOURCES` — ajustar fontes.
+- `RSS_FEEDS_JSON`, `DISABLED_SOURCES`, `ENABLE_INTERNATIONAL`, `GDELT_ENABLED`, `GDELT_QUERIES` — ajustar fontes (veja [docs/SOURCES.md](docs/SOURCES.md)).
 - `RETENTION_HOURS` (48) — por quanto tempo eventos ficam guardados e visíveis.
 
 Sem nenhuma chave, o SAND funciona com fontes públicas e classificação por regras.
 
 ## Fontes
 
-Verificação feita em 23/10/2026 a partir da máquina de desenvolvimento com `npm run verify:sources` (requisições reais):
+O SAND é focado no Brasil. Verificação feita em 24/10/2026 com `npm run verify:sources` (requisições reais): **60 fontes integradas e funcionando**. A lista completa, com método de acesso de cada uma e as **fontes pendentes** (motivo e alternativa), está em [`docs/SOURCES.md`](docs/SOURCES.md).
 
-| Fonte | Tipo | Acesso | Status verificado |
-|---|---|---|---|
-| Agência Brasil (EBC) | RSS | livre; reprodução permitida citando a fonte | ✅ funcionando |
-| g1, g1 Economia, g1 Ceará | RSS | público | ✅ funcionando |
-| BBC News Brasil, BBC World | RSS | público | ✅ funcionando |
-| DW Brasil | RSS (RDF) | público | ✅ funcionando |
-| The Guardian — World | RSS | público | ✅ funcionando |
-| USGS (terremotos M4,5+) | GeoJSON oficial | domínio público | ✅ funcionando |
-| GDACS (ONU/Comissão Europeia) | RSS oficial | CC BY 4.0 | ✅ funcionando (alertas laranja/vermelho + inundações/ciclones/vulcões verdes) |
-| INMET (avisos meteorológicos) | RSS oficial | livre citando a fonte | ✅ funcionando (exige User-Agent próprio, já enviado) |
-| GDELT DOC 2.0 | JSON | sem chave; ≥ 5 s entre requisições | ⚠️ implementado, **não verificado**: respondeu HTTP 429 / falha de rede a partir desta máquina durante o desenvolvimento. O agendador recua (≥ 10 min) e as demais fontes seguem normalmente. |
-| NewsAPI | JSON | exige `NEWSAPI_KEY`; plano gratuito é só para desenvolvimento | ⚠️ implementado, **não verificado** (sem chave) |
+| Grupo | Fontes |
+|---|---|
+| Nacionais | Agência Brasil, g1, Folha, Estadão, O Globo, UOL, CNN Brasil, Poder360, BBC News Brasil, DW Brasil |
+| Regionais | g1 dos 27 estados, Gazeta do Povo, Estado de Minas, A Tarde |
+| Economia | g1 Economia, InfoMoney |
+| Órgãos oficiais | Banco Central (Copom e notícias), IBGE (API), ANEEL (bandeira tarifária, dados abertos), Agência Senado, Agência Câmara, Receita Federal, CERT.br |
+| Alertas | INMET, InfoDengue (27 capitais), Sismologia USP (RSBR), USGS, GDACS |
+| Clima e ambiente | MetSul, ClimaInfo, ((o))eco, Mongabay Brasil |
+| Esporte | ge |
+| Desligadas por padrão | BBC World e Guardian (`ENABLE_INTERNATIONAL=1`), GDELT (`GDELT_ENABLED=1`), NewsAPI (`NEWSAPI_KEY`) |
 
-O SAND guarda e mostra apenas título, um resumo curto e o link para a matéria original. Não raspa páginas. Respeita `ETag`/`Last-Modified`, `Retry-After` e recua exponencialmente em falhas.
-
-Para adicionar a editoria regional da sua cidade, use `RSS_FEEDS_JSON` (o g1 publica feeds por estado, ex. `https://g1.globo.com/rss/g1/sp/sao-paulo/`).
+O SAND guarda e mostra apenas título, um resumo curto e o link para a matéria original. Não raspa páginas e não contorna login, paywall ou proteção anti-robô. Respeita `ETag`/`Last-Modified`, `Retry-After` e recua exponencialmente em falhas. Cada pessoa liga ou desliga fontes em Configurações → Fontes de notícias.
 
 ## Como funciona
 
