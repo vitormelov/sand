@@ -2,7 +2,7 @@
 
 Notícias reais caem como areia. Cada grão é um acontecimento; o tamanho estima o **impacto potencial na vida de quem observa**, a partir da cidade que a pessoa informou.
 
-Fundo branco com um mapa-múndi em traço fino, grãos pretos que clareiam com a idade da notícia até sumir, gravidade, colisões, acúmulo como areia. Sem feed, sem manchetes fixas, sem alarmes. Ao passar o mouse num grão, um pequeno sinal vermelho pulsa no mapa onde a notícia aconteceu (só quando o local foi identificado). Clique num grão para ver a matéria original, por que ela tem aquele tamanho e com que confiança.
+Fundo branco (ou escuro: tema claro, escuro ou automático pelo sistema, em Configurações) com um mapa-múndi em traço fino, grãos pretos que clareiam com a idade da notícia até sumir, gravidade, colisões, acúmulo como areia. Sem feed, sem manchetes fixas, sem alarmes. Ao passar o mouse num grão, um pequeno sinal vermelho pulsa no mapa onde a notícia aconteceu (só quando o local foi identificado). Notícias da última hora ainda não abertas têm um anel fino ao redor; ao abrir uma notícia ela ganha um pequeno ponto claro no centro ("vista"). Notícias podem ser salvas e ficam em "Notícias salvas" (ícone de marcador), mesmo depois de saírem da areia. Clique num grão para ver a matéria original, por que ela tem aquele tamanho e com que confiança.
 
 ---
 
@@ -21,7 +21,7 @@ npm run dev
 - Interface: http://localhost:5173 (Vite; usa `PORT` se definido)
 - API: http://localhost:8787 (`SAND_API_PORT`)
 
-No primeiro acesso o SAND pede só a cidade (busca por nome, sem GPS). As notícias começam a chegar em poucos segundos; as fontes são consultadas no servidor em intervalos de 5–15 minutos.
+O site exige **login com e-mail e senha**. No primeiro acesso, um questionário curto refina as estimativas: cidade (GPS ou digitada — obrigatória), importância de cada categoria, futebol e time, rotina (transporte, aluguel, filhos em idade escolar), trabalho e finanças, até 3 outros lugares importantes e temas que prefere ver menos. Tudo pode ser refeito em Configurações. O laboratório (`/?lab`) e o DEMO (`/?demo`) não exigem login, pois usam só dados fictícios. As notícias começam a chegar em poucos segundos; as fontes são consultadas no servidor em intervalos de 5–15 minutos.
 
 Produção (API + interface no mesmo processo, http://localhost:8787):
 
@@ -42,6 +42,7 @@ Modo demonstração, com dados **fictícios** e o rótulo "DEMO — dados fictí
 | Comando | O que faz |
 |---|---|
 | `npm run dev` | API (tsx watch) + interface (Vite) |
+| `npm run dev:lan` | igual, mas acessível por outros aparelhos da rede (ex.: celular em `http://<IP-do-PC>:5173`) |
 | `npm run build` | typecheck + bundle de produção em `dist/` |
 | `npm start` | servidor de produção (serve `dist/` + API) |
 | `npm test` | todos os testes (unitários, integração, interface) |
@@ -54,7 +55,7 @@ Modo demonstração, com dados **fictícios** e o rótulo "DEMO — dados fictí
 Tudo é opcional; veja [`.env.example`](.env.example). Copie para `.env` (carregado automaticamente) ou defina no ambiente de hospedagem.
 
 - `NEWSAPI_KEY` — ativa a NewsAPI (opcional).
-- `ANTHROPIC_API_KEY` — ativa a classificação complementar por IA para itens ambíguos (opcional; modelo em `LLM_MODEL`, padrão `claude-opus-5-5`, limite em `LLM_MAX_CALLS_PER_HOUR`). Só título e resumo da notícia são enviados; nunca dados do usuário.
+- **IA desligada por padrão**: o SAND funciona só com regras e não gasta tokens. Para ativar a classificação complementar por IA em itens ambíguos é preciso definir **as duas** variáveis, `LLM_ENABLED=true` e `ANTHROPIC_API_KEY` (modelo em `LLM_MODEL`, padrão `claude-opus-5-5`; limite em `LLM_MAX_CALLS_PER_HOUR`). Uma chave existente no ambiente, sozinha, não ativa nada. O custo depende do volume de notícias, não do número de usuários. Só título e resumo da notícia são enviados; nunca dados do usuário.
 - `RSS_FEEDS_JSON`, `GDELT_QUERIES`, `DISABLED_SOURCES` — ajustar fontes.
 - `RETENTION_HOURS` (48) — por quanto tempo eventos ficam guardados e visíveis.
 
@@ -89,10 +90,18 @@ Para adicionar a editoria regional da sua cidade, use `RSS_FEEDS_JSON` (o g1 pub
 
 Resumo: o servidor coleta, normaliza, deduplica, agrupa e analisa cada notícia **sem saber quem vai vê-la** (categorias, canais de consequência, local, severidade, até onde os efeitos se espalham). O navegador recebe os eventos por SSE e calcula o impacto com o perfil local (cidade + interesses opcionais). Impacto e confiança são dimensões separadas.
 
-## Privacidade
+## Contas e privacidade
 
-- Cidade e interesses ficam no `localStorage`; o cálculo de impacto é local.
-- Sem GPS: guarda-se o nome da cidade e o centro aproximado (0,1° ≈ 11 km).
+- Senhas guardadas apenas como hash scrypt com sal; sessão em cookie `HttpOnly`, `SameSite=Lax` (e `Secure` em produção), válida por 30 dias.
+- Login limitado por IP e por e-mail; resposta idêntica para e-mail inexistente e senha errada.
+- Requisições que alteram dados exigem o cabeçalho `X-Sand: 1` (proteção CSRF).
+- Notícias, stream e geocodificação exigem sessão; `/api/health` é público.
+- Excluir a conta (Configurações → Conta) apaga e-mail, sessões e respostas imediatamente.
+- Ainda **não há recuperação de senha** (precisa de um serviço de envio de e-mail).
+
+
+- As respostas do questionário ficam na conta do usuário; o **cálculo de impacto continua acontecendo no navegador** — o servidor envia as mesmas notícias para todos.
+- GPS é opcional: a posição é arredondada para 0,1° (~11 km) no navegador antes de ser enviada; o servidor arredonda de novo e descobre a cidade via OpenStreetMap Nominatim (com cache e no máximo 1 consulta/s, conforme a política de uso). Guarda-se só a cidade e o centro aproximado.
 - A busca de cidade passa pelo servidor do SAND, que consulta o Open-Meteo Geocoding (gratuito, sem chave, para uso não comercial; com fallback offline para cidades brasileiras).
 - Feedback "relevante / não relevante" fica no navegador; o servidor recebe só a contagem anônima por notícia.
 - Sem contas, analytics, anúncios ou rastreadores. Configurações → "Limpar preferências locais" apaga tudo.
@@ -126,6 +135,8 @@ docker build -t sand .
 ```bash
 docker run -p 8787:8787 -v sand-data:/app/data sand
 ```
+
+**Use HTTPS em produção**: navegadores só liberam o GPS e cookies `Secure` em HTTPS (ou em `localhost`). Atrás de um proxy que já faz HTTPS, mantenha o padrão; para testar em HTTP puro, `COOKIE_SECURE=false`.
 
 **Qualquer host Node (Render, Railway, Fly.io, VPS):** build `npm ci && npm run build`, start `npm start`, volume persistente em `data/` (ou `DATABASE_PATH`). O host define `PORT`.
 

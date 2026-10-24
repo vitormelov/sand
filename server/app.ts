@@ -6,7 +6,8 @@ import { createEnricher } from './analysis/llm';
 import { Pipeline } from './ingestion/pipeline';
 import { Scheduler } from './ingestion/scheduler';
 import { Store } from './persistence/store';
-import { searchCities } from './routes/geocode';
+import { createAuthLimiters, handleAuth, currentUserId } from './routes/auth';
+import { reverseGeocode, searchCities } from './routes/geocode';
 import { RateLimiter } from './routes/rateLimit';
 import type { SourceConnector } from './sources/types';
 import { SseHub } from './streaming/sse';
@@ -22,6 +23,10 @@ export interface AppOptions {
   maxSsePerIp?: number;
   corsOrigin?: string;
   llm?: { anthropicKey?: string; model: string; maxCallsPerHour: number };
+  /** News, stream and geocoding require a logged-in session (default true). */
+  requireAuth?: boolean;
+  /** Mark the session cookie Secure (default: production). */
+  secureCookies?: boolean;
   log?: (msg: string) => void;
 }
 
@@ -41,7 +46,7 @@ const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
   'X-Frame-Options': 'DENY',
-  'Permissions-Policy': 'geolocation=(), camera=(), microphone=()',
+  'Permissions-Policy': 'geolocation=(self), camera=(), microphone=()',
   'Content-Security-Policy':
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
 };
@@ -111,6 +116,8 @@ export function createApp(opts: AppOptions) {
 
   const retention = setInterval(() => {
     const now = Date.now();
+    store.purgeSessions(new Date(now).toISOString());
+    store.purgeViewed(new Date(now - opts.retentionHours * 2 * 3_600_000).toISOString());
     const ids = store.purge(new Date(now).toISOString(), new Date(now - opts.retentionHours * 2 * 3_600_000).toISOString());
     if (ids.length) {
       pipeline.forget(ids);
@@ -120,6 +127,7 @@ export function createApp(opts: AppOptions) {
   }, 10 * 60_000);
   retention.unref();
 
+  const authLimiters = createAuthLimiters();
   const geoLimiter = new RateLimiter(20, 0.5);
   const feedbackLimiter = new RateLimiter(30, 0.2);
   const apiLimiter = new RateLimiter(60, 2);
@@ -166,6 +174,18 @@ export function createApp(opts: AppOptions) {
       if (!url.pathname.startsWith('/api/')) return await serveStatic(req, res, url.pathname);
       for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, v);
 
+      // CSRF: state-changing requests must carry a custom header, which browsers only
+      // allow same-origin (no CORS is granted for it).
+      if (req.method !== 'GET' && req.method !== 'HEAD' && req.headers['x-sand'] !== '1') {
+        return json(res, 403, { error: 'csrf' });
+      }
+      const authCtx = { store, secureCookies: opts.secureCookies ?? false, json, readBody, limiters: authLimiters };
+      if (url.pathname.startsWith('/api/auth/') || url.pathname.startsWith('/api/me')) {
+        if (await handleAuth(req, res, url, ip, authCtx)) return;
+      }
+      const needsUser = (opts.requireAuth ?? true) && !['/api/health', '/api/sources'].includes(url.pathname);
+      if (needsUser && !currentUserId(req, store)) return json(res, 401, { error: 'unauthenticated' });
+
       if (url.pathname === '/api/stream' && req.method === 'GET') {
         const lastId = Number(req.headers['last-event-id'] ?? url.searchParams.get('since') ?? NaN);
         hub.open(req, res, ip, {
@@ -185,6 +205,13 @@ export function createApp(opts: AppOptions) {
         const since = Number(url.searchParams.get('since') ?? 0);
         const events = since > 0 ? store.eventsAfterSeq(since, 500) : store.recentEvents(opts.snapshotLimit);
         return json(res, 200, { events, seq: store.currentSeq() });
+      }
+      if (url.pathname === '/api/geocode/reverse') {
+        if (!geoLimiter.take(ip)) return json(res, 429, { error: 'rate_limited' }, { 'Retry-After': '10' });
+        const lat = Number(url.searchParams.get('lat'));
+        const lon = Number(url.searchParams.get('lon'));
+        if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return json(res, 400, { error: 'invalid_coordinates' });
+        return json(res, 200, await reverseGeocode(lat, lon));
       }
       if (url.pathname === '/api/geocode') {
         if (!geoLimiter.take(ip)) return json(res, 429, { error: 'rate_limited' }, { 'Retry-After': '10' });

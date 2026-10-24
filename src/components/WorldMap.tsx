@@ -8,7 +8,7 @@ import { loadWorld, type Lines } from '../map/worldData';
  * Static: redrawn only on resize. On top of it, an optional tiny red marker shows
  * where the hovered/pinned story happened.
  */
-export function WorldMap({ markers = [] }: { markers?: MapPoint[] }) {
+export function WorldMap({ markers = [], theme = 'light' }: { markers?: MapPoint[]; theme?: 'light' | 'dark' }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState<{ w: number; h: number } | null>(null);
 
@@ -48,8 +48,9 @@ export function WorldMap({ markers = [] }: { markers?: MapPoint[] }) {
         }
         ctx.stroke();
       };
-      stroke(lines.borders, 'rgba(17,17,17,0.08)', 0.5);
-      stroke(lines.coast, 'rgba(17,17,17,0.15)', 0.7);
+      const rgb = theme === 'dark' ? '233,233,230' : '17,17,17';
+      stroke(lines.borders, `rgba(${rgb},${theme === 'dark' ? 0.09 : 0.08})`, 0.5);
+      stroke(lines.coast, `rgba(${rgb},${theme === 'dark' ? 0.17 : 0.15})`, 0.7);
     };
 
     loadWorld()
@@ -67,7 +68,7 @@ export function WorldMap({ markers = [] }: { markers?: MapPoint[] }) {
       disposed = true;
       ro.disconnect();
     };
-  }, []);
+  }, [theme]);
 
   const project = size ? fitWorld(size.w, size.h) : null;
   return (

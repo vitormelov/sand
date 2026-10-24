@@ -66,7 +66,10 @@ export const config = {
   maxSsePerIp: num('MAX_SSE_PER_IP', 6),
   corsOrigin: process.env.CORS_ORIGIN,
   llm: {
-    anthropicKey: process.env.ANTHROPIC_API_KEY || undefined,
+    // Off unless explicitly enabled: a key that merely exists in the host environment
+    // never turns AI on (and never spends tokens) by accident.
+    enabled: bool('LLM_ENABLED', false),
+    anthropicKey: bool('LLM_ENABLED', false) ? process.env.ANTHROPIC_API_KEY || undefined : undefined,
     model: process.env.LLM_MODEL ?? 'claude-opus-5-5',
     maxCallsPerHour: num('LLM_MAX_CALLS_PER_HOUR', 120),
   },

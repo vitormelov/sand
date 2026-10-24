@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { INTEREST } from '../shared/impact/config';
-import type { Category, UserProfile } from '../shared/types';
+import type { SavedItem, StoredProfile } from '../shared/profile';
+import type { Category } from '../shared/types';
 import { Clock } from './components/Clock';
 import { EventDetails, EventPreview } from './components/EventDetails';
 import { LabPanel } from './components/LabPanel';
 import { LeaderLine } from './components/LeaderLine';
-import { IconList, IconSettings } from './components/icons';
-import { Onboarding } from './components/Onboarding';
+import { IconBookmark, IconList, IconSettings } from './components/icons';
+import { SavedList } from './components/SavedList';
+import { Questionnaire } from './components/Questionnaire';
+import { markViewed, saveItem, saveProfile, unsaveItem } from './services/account';
 import { ParticleCanvas, type GrainRef } from './components/ParticleCanvas';
 import { WorldMap } from './components/WorldMap';
 import { eventPoints } from './map/eventPoints';
@@ -21,11 +24,22 @@ import { clearAllLocal, DEFAULT_PREFS, loadFeedback, loadPrefs, saveFeedback, sa
 import { StreamClient } from './services/stream';
 import { viewScale, type SandSimulation, type SimSettings } from './simulation/SandSimulation';
 import { SandStore, useStoreState } from './state/store';
+import { useTheme } from './services/theme';
 
 const IDLE_MS = 4_000;
 
-function profileOf(p: Prefs): UserProfile {
-  return { location: p.location, interests: p.interests, affinity: p.affinity };
+/** Logged-in account. Without one (lab/demo), the profile lives only in this browser. */
+export interface AccountProps {
+  email: string;
+  profile: StoredProfile;
+  viewed?: string[];
+  saved?: SavedItem[];
+  onLogout: () => void;
+  onDeleted: () => void;
+}
+
+function localProfile(p: Prefs): StoredProfile {
+  return { location: p.location, interests: p.interests, affinity: p.affinity, onboarded: true };
 }
 
 function usePrefersReducedMotion(): boolean {
@@ -40,18 +54,97 @@ function usePrefersReducedMotion(): boolean {
   return v;
 }
 
-type Panel = 'none' | 'settings' | 'recent';
+type Panel = 'none' | 'settings' | 'recent' | 'saved';
+
+const VIEWED_KEY = 'sand:viewed:v1';
+const SAVED_KEY = 'sand:saved:v1';
+function readLocal<T>(key: string, fallback: T): T {
+  try {
+    return (JSON.parse(localStorage.getItem(key) ?? 'null') as T) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+function writeLocal(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* private mode: kept for this session only */
+  }
+}
 
 const query = new URLSearchParams(window.location.search);
 
-export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab') }: { demo?: boolean; lab?: boolean }) {
+export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab'), account }: { demo?: boolean; lab?: boolean; account?: AccountProps }) {
   // The lab is a fictitious-data mode too: the real stream is never connected there.
   const demo = demoProp || lab;
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
+  const [profile, setProfile] = useState<StoredProfile>(() => account?.profile ?? localProfile(loadPrefs()));
+  const [questionnaire, setQuestionnaire] = useState(!!account && !account.profile.onboarded);
+  const saveTimer = useRef<ReturnType<typeof setTimeout>>();
+  /** Profile changes are saved to the account (debounced) or, without one, to this browser. */
+  const updateProfile = useCallback(
+    (next: StoredProfile) => {
+      setProfile(next);
+      if (account) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(() => void saveProfile(next).catch(() => undefined), 600);
+      } else {
+        setPrefs((p) => ({ ...p, location: next.location, interests: next.interests, affinity: next.affinity }));
+      }
+    },
+    [account],
+  );
   const [feedback, setFeedback] = useState(loadFeedback);
-  const store = useMemo(() => new SandStore(profileOf(prefs), demo), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const store = useMemo(() => new SandStore(profile, demo), []); // eslint-disable-line react-hooks/exhaustive-deps
   const ui = useStoreState(store);
   const simRef = useRef<SandSimulation | null>(null);
+  // --- Seen and saved news -------------------------------------------------------
+  // Kept in the account (or, in lab/demo, only in this browser).
+  const [viewed, setViewed] = useState<Set<string>>(() => new Set(account?.viewed ?? readLocal<string[]>(VIEWED_KEY, [])));
+  const [saved, setSaved] = useState<SavedItem[]>(() => account?.saved ?? readLocal<SavedItem[]>(SAVED_KEY, []));
+  const pendingViewed = useRef<string[]>([]);
+  const viewedTimer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => {
+    simRef.current?.setViewed(viewed);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const markSeen = useCallback(
+    (id: string) => {
+      if (viewed.has(id)) return;
+      const next = new Set(viewed).add(id);
+      setViewed(next);
+      simRef.current?.markViewed(id);
+      if (!account) return writeLocal(VIEWED_KEY, [...next].slice(-2000));
+      pendingViewed.current.push(id);
+      clearTimeout(viewedTimer.current);
+      viewedTimer.current = setTimeout(() => {
+        const ids = pendingViewed.current.splice(0);
+        void markViewed(ids).catch(() => undefined);
+      }, 1500);
+    },
+    [viewed, account],
+  );
+  const savedIds = useMemo(() => new Set(saved.map((s) => s.id)), [saved]);
+  const toggleSave = useCallback(
+    (eventId: string) => {
+      const e = store.events.get(eventId);
+      if (savedIds.has(eventId)) {
+        const next = saved.filter((s) => s.id !== eventId);
+        setSaved(next);
+        if (account) void unsaveItem(eventId).catch(() => undefined);
+        else writeLocal(SAVED_KEY, next);
+        return;
+      }
+      if (!e) return;
+      const item: SavedItem = { id: e.id, title: e.title, url: e.url, sourceName: e.sourceName, publishedAt: e.publishedAt, summary: e.summary, savedAt: new Date().toISOString() };
+      const next = [item, ...saved];
+      setSaved(next);
+      if (account) void saveItem(item).catch(() => undefined);
+      else writeLocal(SAVED_KEY, next);
+    },
+    [saved, savedIds, store, account],
+  );
   const [selected, setSelected] = useState<{ id: string; particleId?: number } | null>(null);
   const [hovered, setHovered] = useState<GrainRef | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -67,6 +160,7 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
   const [dismissedCritical, setDismissedCritical] = useState<Set<string>>(new Set());
   const systemReduced = usePrefersReducedMotion();
   const reducedMotion = prefs.reducedMotion === 'on' || (prefs.reducedMotion === 'auto' && systemReduced);
+  const theme = useTheme(prefs.theme);
 
   // Data source: the real stream, or an explicitly labelled DEMO generator.
   useEffect(() => {
@@ -79,14 +173,15 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
 
   // Persist preferences; recompute impact when what it depends on changes.
   useEffect(() => savePrefs(prefs), [prefs]);
-  const profileKey = JSON.stringify([prefs.location, prefs.interests]);
+  // Everything in the profile except the feedback-learned affinity (which only affects new estimates).
+  const profileKey = JSON.stringify({ ...profile, affinity: undefined });
   const firstProfile = useRef(true);
   useEffect(() => {
     if (firstProfile.current) {
       firstProfile.current = false;
       return;
     }
-    store.setProfile(profileOf(prefs));
+    store.setProfile(profile);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profileKey, store]);
 
@@ -111,9 +206,14 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
   const chromeHidden = prefs.ambient && idle && panel === 'none' && !selected && !hovered && !privacy;
 
   const simSettings: SimSettings = useMemo(
-    () => ({ gravity: prefs.gravity, speed: prefs.speed, sizeScale: prefs.sizeScale, density: prefs.density, reducedMotion, sound: prefs.sound }),
-    [prefs.gravity, prefs.speed, prefs.sizeScale, prefs.density, reducedMotion, prefs.sound],
+    () => ({ gravity: prefs.gravity, speed: prefs.speed, sizeScale: prefs.sizeScale, density: prefs.density, reducedMotion, sound: prefs.sound, theme }),
+    [prefs.gravity, prefs.speed, prefs.sizeScale, prefs.density, reducedMotion, prefs.sound, theme],
   );
+
+  // Opening a news item (click, list, saved) marks it as seen.
+  useEffect(() => {
+    if (selected && store.events.has(selected.id)) markSeen(selected.id);
+  }, [selected, store, markSeen]);
 
   const openEvent = useCallback((id: string) => {
     setSelected({ id });
@@ -127,7 +227,7 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
       const previous = feedback[eventId];
       if (previous === value) return;
       // Bounded nudge per category; applies to future estimates only.
-      const affinity = { ...prefs.affinity };
+      const affinity = { ...profile.affinity };
       const step = INTEREST.feedbackStep;
       for (const c of ev.analysis.categories.slice(0, 2) as Category[]) {
         let v = affinity[c] ?? 0;
@@ -138,15 +238,15 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
       const next = { ...feedback, [eventId]: value };
       setFeedback(next);
       saveFeedback(next);
-      setPrefs((p) => ({ ...p, affinity }));
+      updateProfile({ ...profile, affinity });
       if (!ev.demo) void sendFeedback(eventId, value);
     },
-    [feedback, prefs.affinity, store],
+    [feedback, profile, store, updateProfile],
   );
   // Affinity changes reach the engine without recomputing existing grains.
   useEffect(() => {
-    store.setAffinity(prefs.affinity);
-  }, [prefs.affinity, store]);
+    store.setAffinity(profile.affinity);
+  }, [profile.affinity, store]);
 
   const selectedEvent = selected ? store.events.get(selected.id) : undefined;
   const previewEvent = hovered ? store.events.get(hovered.eventId) : undefined;
@@ -194,7 +294,7 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
 
   return (
     <main className={`app ${chromeHidden ? 'is-ambient' : ''} ${reducedMotion ? 'reduce-motion' : ''}`}>
-      {prefs.showMap && <WorldMap markers={markers} />}
+      {prefs.showMap && <WorldMap markers={markers} theme={theme} />}
       <ParticleCanvas
         store={store}
         settings={simSettings}
@@ -221,6 +321,17 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
               setPanel((p) => (p === 'recent' ? 'none' : 'recent'));
             }} aria-label="Notícias recentes" aria-pressed={panel === 'recent'}>
             <IconList />
+          </button>
+          <button
+            className="icon-btn"
+            onClick={() => {
+              setSelected(null);
+              setPanel((p) => (p === 'saved' ? 'none' : 'saved'));
+            }}
+            aria-label="Notícias salvas"
+            aria-pressed={panel === 'saved'}
+          >
+            <IconBookmark />
           </button>
           <button className="icon-btn" onClick={() => {
               setSelected(null);
@@ -251,13 +362,13 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
 
       {prefs.showIndicators && (
         <div className="chrome">
-          <StatusBar ui={ui} prefs={prefs} store={store} />
+          <StatusBar ui={ui} prefs={{ ...prefs, location: profile.location }} store={store} />
         </div>
       )}
 
       {!selectedEvent && previewEvent && panel === 'none' && (
         <>
-          <EventPreview event={previewEvent} impact={store.impacts.get(previewEvent.id)} />
+          <EventPreview event={previewEvent} impact={store.impacts.get(previewEvent.id)} seen={viewed.has(previewEvent.id)} />
           <LeaderLine simRef={simRef} eventId={previewEvent.id} particleId={hovered?.particleId} target=".details--preview" />
         </>
       )}
@@ -270,6 +381,8 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
           event={selectedEvent}
           impact={selectedImpact}
           feedback={feedback[selectedEvent.id]}
+          saved={savedIds.has(selectedEvent.id)}
+          onToggleSave={() => toggleSave(selectedEvent.id)}
           relatedTitle={(id) => store.events.get(id)?.title}
           onFeedback={(v) => onFeedback(selectedEvent.id, v)}
           onClose={() => setSelected(null)}
@@ -280,6 +393,13 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
       {panel === 'settings' && (
         <SettingsPanel
           prefs={prefs}
+          profile={profile}
+          account={account}
+          onProfileChange={updateProfile}
+          onEditAnswers={() => {
+            setPanel('none');
+            setQuestionnaire(true);
+          }}
           onChange={update}
           onClose={() => setPanel('none')}
           onPrivacy={() => setPrivacy(true)}
@@ -290,11 +410,29 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
           }}
         />
       )}
-      {panel === 'recent' && <RecentList store={store} ui={ui} onOpen={openEvent} onClose={() => setPanel('none')} />}
+      {panel === 'recent' && <RecentList store={store} ui={ui} viewed={viewed} savedIds={savedIds} onOpen={openEvent} onClose={() => setPanel('none')} />}
+      {panel === 'saved' && (
+        <SavedList
+          items={saved}
+          isLive={(id) => store.events.has(id)}
+          onOpen={openEvent}
+          onRemove={(id) => toggleSave(id)}
+          onClose={() => setPanel('none')}
+        />
+      )}
       {privacy && <PrivacyDialog onClose={() => setPrivacy(false)} />}
 
-      {!prefs.onboarded && !demo && (
-        <Onboarding onPick={(loc) => update({ location: loc, onboarded: true })} onSkip={() => update({ onboarded: true })} />
+      {questionnaire && account && (
+        <Questionnaire
+          initial={profile}
+          onCancel={profile.onboarded ? () => setQuestionnaire(false) : undefined}
+          onDone={(p) => {
+            setQuestionnaire(false);
+            clearTimeout(saveTimer.current);
+            setProfile(p);
+            void saveProfile(p).catch(() => undefined);
+          }}
+        />
       )}
     </main>
   );

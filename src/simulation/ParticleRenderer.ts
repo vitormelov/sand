@@ -1,11 +1,31 @@
 import type { Particle } from './Particle';
 import type { PhysicsEngine } from './PhysicsEngine';
 
-const INK = '#111111';
+export type RenderTheme = 'light' | 'dark';
+
+/** Canvas colours per theme (the canvas can't read CSS variables). */
+const PALETTES = {
+  light: { ink: '#111111', rgb: '17,17,17', seen: 'rgba(255,255,255,0.92)' },
+  dark: { ink: '#e9e9e6', rgb: '233,233,230', seen: 'rgba(15,15,16,0.9)' },
+} as const;
+let pal: (typeof PALETTES)[RenderTheme] = PALETTES.light;
 const TAU = Math.PI * 2;
 /** Must match SandSimulation.TONE_LEVELS: opacity is quantized so grains batch by level. */
 const LEVELS = 24;
 const level = (tone: number) => Math.max(1, Math.round(tone * LEVELS));
+/** Must match SandSimulation.FRESH_MS. */
+const FRESH_MS = 60 * 60_000;
+/** Same rhythm as the red map marker. */
+const FRESH_PULSE_MS = 1600;
+
+/** "Already opened": a small light dot at the centre of the grain. */
+function seenDot(c: CanvasRenderingContext2D, p: Particle): void {
+  c.fillStyle = pal.seen;
+  c.beginPath();
+  c.arc(p.x, p.y, Math.max(1.2, p.r * 0.26), 0, TAU);
+  c.fill();
+  c.fillStyle = pal.ink;
+}
 
 /**
  * Canvas 2D renderer.
@@ -45,7 +65,7 @@ export class ParticleRenderer {
   private bakeAll(engine: PhysicsEngine): void {
     const c = this.sctx;
     c.clearRect(0, 0, this.w, this.h);
-    c.fillStyle = INK;
+    c.fillStyle = pal.ink;
     const fadingSet = new Set(this.fading);
     // One path per age level: older news is lighter. Lighter levels first, so fresh
     // (dark) grains stay crisp where they overlap old ones.
@@ -67,22 +87,40 @@ export class ParticleRenderer {
       c.fill();
     }
     c.globalAlpha = 1;
+    engine.forEachStatic((s) => {
+      if (s.viewed && !fadingSet.has(s)) seenDot(c, s);
+    });
     this.bakes++;
   }
 
   private bakeOne(s: Particle): void {
     const c = this.sctx;
     c.globalAlpha = level(s.tone) / LEVELS;
-    c.fillStyle = INK;
+    c.fillStyle = pal.ink;
     c.beginPath();
     c.arc(s.x, s.y, s.r, 0, TAU);
     c.fill();
     c.globalAlpha = 1;
+    if (s.viewed) seenDot(c, s);
+  }
+
+  /** Switch palette; the caller marks the sediment dirty so settled grains are re-drawn. */
+  setTheme(theme: RenderTheme): void {
+    pal = PALETTES[theme];
   }
 
   render(
     engine: PhysicsEngine,
-    opts: { time: number; dt: number; selectedEventId?: string | null; hoverId?: number | null; critical: Particle[]; reducedMotion: boolean },
+    opts: {
+      time: number;
+      dt: number;
+      selectedEventId?: string | null;
+      hoverId?: number | null;
+      critical: Particle[];
+      /** News from the last hour not yet opened. */
+      fresh?: Particle[];
+      reducedMotion: boolean;
+    },
   ): void {
     // Incremental bake of grains deposited since the last frame.
     if (engine.newlyDeposited.length) {
@@ -115,23 +153,48 @@ export class ParticleRenderer {
     // Fading-in deposits (reduced-motion placement).
     for (const p of this.fading) {
       c.globalAlpha = p.alpha * (level(p.tone) / LEVELS);
-      c.fillStyle = INK;
+      c.fillStyle = pal.ink;
       c.beginPath();
       c.arc(p.x, p.y, p.r, 0, TAU);
       c.fill();
+      if (p.viewed) seenDot(c, p);
     }
     c.globalAlpha = 1;
 
     // Falling grains (few): each with its fade-in and age tone.
-    c.fillStyle = INK;
+    c.fillStyle = pal.ink;
     for (const p of engine.actives) {
       p.alpha = Math.min(1, p.alpha + opts.dt * 2.5);
       c.globalAlpha = p.alpha * (level(p.tone) / LEVELS);
       c.beginPath();
       c.arc(p.x, p.y, p.r, 0, TAU);
       c.fill();
+      if (p.viewed) seenDot(c, p);
     }
     c.globalAlpha = 1;
+
+    // New in the last hour and not opened yet: a ring that breathes outward like the map
+    // marker (each grain on its own rhythm), softer as the hour passes. Static with reduced motion.
+    if (opts.fresh?.length) {
+      const now = Date.now();
+      c.lineWidth = 1.25;
+      for (const p of opts.fresh) {
+        if (!p.eventId || p.viewed || p.critical || p.newsAt == null) continue;
+        const weight = 0.45 + 0.55 * (1 - Math.min(1, (now - p.newsAt) / FRESH_MS));
+        if (opts.reducedMotion) {
+          c.strokeStyle = `rgba(${pal.rgb},${0.45 * weight})`;
+          c.beginPath();
+          c.arc(p.x, p.y, p.r + 3, 0, TAU);
+          c.stroke();
+          continue;
+        }
+        const t = (now / FRESH_PULSE_MS + p.phase / TAU) % 1;
+        c.strokeStyle = `rgba(${pal.rgb},${0.6 * (1 - t) * weight})`;
+        c.beginPath();
+        c.arc(p.x, p.y, p.r + 2 + t * (p.r * 0.9 + 9), 0, TAU);
+        c.stroke();
+      }
+    }
 
     // Critical grains: a slow, faint halo — never a flash.
     if (opts.critical.length) {
@@ -139,7 +202,7 @@ export class ParticleRenderer {
       for (const p of opts.critical) {
         if (!p.eventId) continue;
         const pulse = opts.reducedMotion ? 0.5 : 0.5 + 0.5 * Math.sin(opts.time * 0.8 + p.phase);
-        c.strokeStyle = `rgba(17,17,17,${0.1 + 0.12 * pulse})`;
+        c.strokeStyle = `rgba(${pal.rgb},${0.1 + 0.12 * pulse})`;
         c.beginPath();
         c.arc(p.x, p.y, p.r + 3 + 2 * pulse, 0, TAU);
         c.stroke();
@@ -150,7 +213,7 @@ export class ParticleRenderer {
     if (opts.selectedEventId || opts.hoverId != null) {
       c.lineWidth = 1.25;
       const ring = (p: Particle, alpha: number, gap: number) => {
-        c.strokeStyle = `rgba(17,17,17,${alpha})`;
+        c.strokeStyle = `rgba(${pal.rgb},${alpha})`;
         c.beginPath();
         c.arc(p.x, p.y, p.r + gap, 0, TAU);
         c.stroke();

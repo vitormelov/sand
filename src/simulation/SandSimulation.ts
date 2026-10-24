@@ -11,6 +11,7 @@ export interface SimSettings {
   density: 'low' | 'normal' | 'high';
   reducedMotion: boolean;
   sound: boolean;
+  theme?: 'light' | 'dark';
 }
 
 export interface SpawnRequest {
@@ -27,6 +28,8 @@ export interface SpawnRequest {
 
 /** Opacity levels used for age shading (quantized so the sediment is re-baked rarely). */
 export const TONE_LEVELS = 24;
+/** News published within this window, not yet opened, gets a thin "new" ring. */
+export const FRESH_MS = 60 * 60_000;
 const TONE_REFRESH_S = 15;
 
 /** 1 = just published (solid ink), 0 = reached the end of its life (gone). */
@@ -88,6 +91,9 @@ export class SandSimulation {
   private pruneTimer = 5;
   private paused = false;
   private toneTimer = 0;
+  private viewed = new Set<string>();
+  /** Grains of news from the last hour that the user hasn't opened yet. */
+  private fresh: Particle[] = [];
   private relayoutTimer?: ReturnType<typeof setTimeout>;
   private layoutDirty = false;
   private lastRelayout = 0;
@@ -100,6 +106,7 @@ export class SandSimulation {
     this.engine = new PhysicsEngine(width, height, { ...DEFAULT_PHYSICS });
     this.renderer = new ParticleRenderer(canvas);
     this.applySettings();
+    this.renderer.setTheme(settings.theme ?? 'light');
     this.renderer.resize(width, height, this.dpr);
     this.engine.onDeposit = (p) => {
       if (this.settings.sound && p.r >= 2.4 && !this.settings.reducedMotion) this.sound.tick(p.r);
@@ -127,7 +134,12 @@ export class SandSimulation {
 
   setSettings(next: Partial<SimSettings>): void {
     const prevScale = this.settings.sizeScale;
+    const prevTheme = this.settings.theme;
     this.settings = { ...this.settings, ...next };
+    if (next.theme && next.theme !== prevTheme) {
+      this.renderer.setTheme(next.theme);
+      this.engine.dirty = true; // re-draw the settled sand in the new colours
+    }
     this.applySettings();
     if (next.sizeScale != null && next.sizeScale !== prevScale) this.rescaleAll();
   }
@@ -316,11 +328,35 @@ export class SandSimulation {
       vy: 20 + Math.random() * 20,
     });
     p.tone = toneFor(p.newsAt, p.fadeAt);
+    p.viewed = this.viewed.has(p.eventId);
+    if (this.isFresh(p, Date.now())) this.fresh.push(p);
     if (!this.byEvent.has(p.eventId)) this.byEvent.set(p.eventId, []);
     this.byEvent.get(p.eventId)!.push(p);
     if (p.critical) this.critical.push(p);
     if (this.settings.reducedMotion) this.engine.dropInstant(p);
     else this.engine.add(p);
+  }
+
+  private isFresh(p: Particle, now: number): boolean {
+    return !p.viewed && !!p.eventId && p.newsAt != null && now - p.newsAt < FRESH_MS && p.state !== 'removed';
+  }
+
+  /** Ids the user already opened (from the account). */
+  setViewed(ids: Iterable<string>): void {
+    this.viewed = new Set(ids);
+    for (const [id, list] of this.byEvent) for (const p of list) p.viewed = this.viewed.has(id);
+    this.fresh = this.fresh.filter((p) => !p.viewed);
+    this.engine.dirty = true;
+  }
+
+  /** The user opened this news: it loses the "new" ring and gets the "seen" mark. */
+  markViewed(eventId: string): void {
+    if (this.viewed.has(eventId)) return;
+    this.viewed.add(eventId);
+    const list = this.byEvent.get(eventId);
+    if (list) for (const p of list) p.viewed = true;
+    this.fresh = this.fresh.filter((p) => p.eventId !== eventId);
+    this.engine.dirty = true;
   }
 
   /**
@@ -342,6 +378,7 @@ export class SandSimulation {
       else this.byEvent.delete(id);
     }
     this.critical = this.critical.filter((p) => p.state !== 'removed');
+    this.fresh = this.fresh.filter((p) => this.isFresh(p, now));
     if (changed) this.engine.dirty = true;
   }
 
@@ -398,6 +435,7 @@ export class SandSimulation {
       selectedEventId: this.selected,
       hoverId: this.hoverId,
       critical: this.critical,
+      fresh: this.fresh,
       reducedMotion: this.settings.reducedMotion,
     });
     this.raf = requestAnimationFrame(this.frame);

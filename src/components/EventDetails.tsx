@@ -4,12 +4,14 @@ import type { NewsEvent, RelationKind } from '../../shared/types';
 import { safeExternalUrl } from '../services/api';
 import type { FeedbackValue } from '../services/storage';
 import { formatWhen, hostOf } from '../utils/format';
-import { IconClose, IconExternal } from './icons';
+import { IconBookmark, IconClose, IconExternal } from './icons';
 
 interface Props {
   event: NewsEvent;
   impact: ImpactResult;
   feedback?: FeedbackValue;
+  saved?: boolean;
+  onToggleSave?: () => void;
   relatedTitle: (id: string) => string | undefined;
   onFeedback: (v: FeedbackValue) => void;
   onClose: () => void;
@@ -30,12 +32,14 @@ const VERIFICATION_LABEL = {
 } as const;
 
 /** Hover preview: source and headline only. Shares the fixed central slot with the full panel. */
-export function EventPreview({ event, impact }: { event: NewsEvent; impact?: ImpactResult }) {
+export function EventPreview({ event, impact, seen }: { event: NewsEvent; impact?: ImpactResult; seen?: boolean }) {
+  const fresh = !seen && Date.now() - Date.parse(event.publishedAt ?? event.firstSeenAt) < 60 * 60_000;
   return (
     <div className="details details--preview" aria-hidden="true">
       <span className="details__source">
         {event.sourceName}
         {impact ? ` · impacto ${impact.score}` : ''}
+        {seen ? ' · vista' : fresh ? ' · nova' : ''}
         {event.demo ? ' · DEMO (fictício)' : ''}
       </span>
       <p className="details__title">{event.title}</p>
@@ -49,7 +53,7 @@ export function EventPreview({ event, impact }: { event: NewsEvent; impact?: Imp
  * narrow screens). A thin leader line connects it to its grain.
  * All text from sources is rendered as plain text — never as HTML.
  */
-export function EventDetails({ event, impact, feedback, relatedTitle, onFeedback, onClose, onOpenRelated }: Props) {
+export function EventDetails({ event, impact, feedback, saved, onToggleSave, relatedTitle, onFeedback, onClose, onOpenRelated }: Props) {
   const titleRef = useRef<HTMLHeadingElement>(null);
   const [showFactors, setShowFactors] = useState(false);
 
@@ -202,6 +206,11 @@ export function EventDetails({ event, impact, feedback, relatedTitle, onFeedback
           <span className="muted">Link indisponível</span>
         )}
         <div className="feedback" role="group" aria-label="Esta notícia foi relevante para você?">
+          {onToggleSave && (
+            <button className={`chip chip--save ${saved ? 'chip--on' : ''}`} aria-pressed={!!saved} onClick={onToggleSave}>
+              <IconBookmark filled={!!saved} /> {saved ? 'Salva' : 'Salvar'}
+            </button>
+          )}
           <button className={`chip ${feedback === 'relevant' ? 'chip--on' : ''}`} aria-pressed={feedback === 'relevant'} onClick={() => onFeedback('relevant')}>
             Relevante
           </button>

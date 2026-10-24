@@ -85,7 +85,7 @@ let src: ReturnType<typeof fakeSource>;
 
 beforeEach(async () => {
   src = fakeSource();
-  app = createApp({ databasePath: ':memory:', retentionHours: 48, snapshotLimit: 100, connectors: [src.c], ingestion: false, maxSsePerIp: 3, log: () => {} });
+  app = createApp({ databasePath: ':memory:', retentionHours: 48, snapshotLimit: 100, connectors: [src.c], ingestion: false, maxSsePerIp: 3, requireAuth: false, log: () => {} });
   await app.start(0, '127.0.0.1');
   base = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
 });
@@ -154,7 +154,7 @@ describe('server: ingestion → persistence → SSE', () => {
     src.set([item(7)]);
     await app.scheduler.runOnce('fake');
     const id = app.store.recentEvents(1)[0].id;
-    const post = (body: unknown) => fetch(`${base}/api/feedback`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const post = (body: unknown) => fetch(`${base}/api/feedback`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Sand': '1' }, body: JSON.stringify(body) });
     expect((await post({ eventId: id, value: 'relevant' })).status).toBe(200);
     expect((await post({ eventId: id, value: 'maybe' })).status).toBe(400);
     expect((await post({ eventId: 'ev_<script>', value: 'relevant' })).status).toBe(400);

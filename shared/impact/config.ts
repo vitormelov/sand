@@ -102,6 +102,17 @@ export const RULES = {
   softNews: { cap: 35 },
 } as const;
 
+/** Personal-answer rules (see shared/impact/personal.ts). */
+export const PERSONAL = {
+  /** A place the user marked as important counts as this fraction of their own city. */
+  placeWeight: 0.85,
+  /** Topics the user wants to see less of are scaled down (never emergencies near them). */
+  avoidFactor: 0.6,
+  /** Headline mentions the user's football club. */
+  clubBonus: 8,
+  clubSoftCap: 50,
+} as const;
+
 export const IMPACT_BANDS = [
   { max: 20, id: 'very_low', label: 'muito baixo' },
   { max: 40, id: 'low', label: 'baixo' },

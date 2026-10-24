@@ -89,41 +89,76 @@ describe('hover preview and clock', () => {
 });
 
 describe('SettingsPanel', () => {
-  it('searches and selects a city (no GPS)', async () => {
+  const profile = { ...FORTALEZA, onboarded: true };
+  const noop = () => {};
+
+  it('changes the city by name (no GPS needed)', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(JSON.stringify({ results: [{ name: 'Fortaleza', admin1: 'CE', admin1Name: 'Ceará', countryCode: 'BR', countryName: 'Brasil', lat: -3.7, lon: -38.5 }], source: 'open-meteo' })),
+      new Response(JSON.stringify({ results: [{ name: 'Recife', admin1: 'PE', admin1Name: 'Pernambuco', countryCode: 'BR', countryName: 'Brasil', lat: -8.1, lon: -34.9 }], source: 'open-meteo' })),
     );
-    const onChange = vi.fn();
-    render(<SettingsPanel prefs={{ ...DEFAULT_PREFS }} onChange={onChange} onClose={() => {}} onClearAll={() => {}} onPrivacy={() => {}} />);
-    await userEvent.type(screen.getByRole('combobox', { name: 'Buscar cidade' }), 'Fortal');
-    const option = await screen.findByRole('button', { name: 'Fortaleza, Ceará, Brasil' });
-    expect(fetchMock.mock.calls[0][0]).toMatch(/^\/api\/geocode\?q=Fortal/);
+    const onProfileChange = vi.fn();
+    render(<SettingsPanel prefs={{ ...DEFAULT_PREFS }} profile={profile} onProfileChange={onProfileChange} onEditAnswers={noop} onChange={noop} onClose={noop} onClearAll={noop} onPrivacy={noop} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Alterar cidade' }));
+    await userEvent.type(screen.getByRole('combobox', { name: 'Buscar cidade' }), 'Recif');
+    const option = await screen.findByRole('button', { name: 'Recife, Pernambuco, Brasil' });
+    expect(fetchMock.mock.calls[0][0]).toMatch(/^\/api\/geocode\?q=Recif/);
     await userEvent.click(option);
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ location: expect.objectContaining({ name: 'Fortaleza', admin1: 'CE' }) }));
+    expect(onProfileChange).toHaveBeenCalledWith(expect.objectContaining({ location: expect.objectContaining({ name: 'Recife', admin1: 'PE' }), locationSource: 'manual' }));
   });
 
-  it('adjusts preferences: reduced motion, interests, density, indicators', async () => {
+  it('adjusts visual preferences: reduced motion, density, indicators, map', async () => {
     const onChange = vi.fn();
-    render(<SettingsPanel prefs={{ ...DEFAULT_PREFS, location: FORTALEZA.location }} onChange={onChange} onClose={() => {}} onClearAll={() => {}} onPrivacy={() => {}} />);
+    render(<SettingsPanel prefs={{ ...DEFAULT_PREFS }} profile={profile} onProfileChange={noop} onEditAnswers={noop} onChange={onChange} onClose={noop} onClearAll={noop} onPrivacy={noop} />);
     await userEvent.click(screen.getByRole('radio', { name: 'Reduzido' }));
     expect(onChange).toHaveBeenLastCalledWith({ reducedMotion: 'on' });
-    await userEvent.click(screen.getByRole('button', { name: 'Economia' }));
-    expect(onChange).toHaveBeenLastCalledWith({ interests: ['economy'] });
     await userEvent.click(screen.getByRole('radio', { name: 'Densa' }));
     expect(onChange).toHaveBeenLastCalledWith({ density: 'high' });
     await userEvent.click(screen.getByRole('switch', { name: /Mostrar indicadores/ }));
     expect(onChange).toHaveBeenLastCalledWith({ showIndicators: false });
+    await userEvent.click(screen.getByRole('switch', { name: /Mapa ao fundo/ }));
+    expect(onChange).toHaveBeenLastCalledWith({ showMap: false });
   });
 
-  it('lets the user delete the location and clear local preferences (with confirmation)', async () => {
-    const onChange = vi.fn();
+  it('account: redo the questions, log out, change password and delete (with password)', async () => {
+    const onEditAnswers = vi.fn();
+    const onLogout = vi.fn();
+    const onDeleted = vi.fn();
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ ok: true })));
+    render(
+      <SettingsPanel
+        prefs={{ ...DEFAULT_PREFS }}
+        profile={profile}
+        account={{ email: 'eu@example.com', profile, onLogout, onDeleted }}
+        onProfileChange={noop}
+        onEditAnswers={onEditAnswers}
+        onChange={noop}
+        onClose={noop}
+        onClearAll={noop}
+        onPrivacy={noop}
+      />,
+    );
+    expect(screen.getByText('eu@example.com')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Refazer as perguntas/ }));
+    expect(onEditAnswers).toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Sair' }));
+    expect(onLogout).toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Excluir conta' }));
+    await userEvent.type(screen.getByLabelText('Senha atual'), 'minha-senha-1');
+    await userEvent.click(screen.getByRole('button', { name: 'Excluir minha conta' }));
+    const [url, init] = fetchMock.mock.calls.at(-1)!;
+    expect(url).toBe('/api/me');
+    expect((init as RequestInit).method).toBe('DELETE');
+    expect((init as RequestInit).headers).toMatchObject({ 'X-Sand': '1' });
+    expect(onDeleted).toHaveBeenCalled();
+  });
+
+  it('clears local visual preferences only after confirmation', async () => {
     const onClearAll = vi.fn();
-    render(<SettingsPanel prefs={{ ...DEFAULT_PREFS, location: FORTALEZA.location }} onChange={onChange} onClose={() => {}} onClearAll={onClearAll} onPrivacy={() => {}} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Apagar' }));
-    expect(onChange).toHaveBeenCalledWith({ location: undefined });
+    render(<SettingsPanel prefs={{ ...DEFAULT_PREFS }} profile={profile} onProfileChange={noop} onEditAnswers={noop} onChange={noop} onClose={noop} onClearAll={onClearAll} onPrivacy={noop} />);
     await userEvent.click(screen.getByRole('button', { name: 'Limpar preferências locais' }));
     expect(onClearAll).not.toHaveBeenCalled();
-    await userEvent.click(screen.getAllByRole('button', { name: 'Apagar' }).at(-1)!);
+    await userEvent.click(screen.getByRole('button', { name: 'Apagar' }));
     expect(onClearAll).toHaveBeenCalled();
   });
 });

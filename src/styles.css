@@ -9,8 +9,43 @@
   --ok: #8a8a8a;
   --warn: #b08a3a;
   --off: #b35a4a;
+  --ink-rgb: 17, 17, 17;
+  --on-ink: #ffffff;
+  --ink-hover: #2a2a2a;
+  --panel: rgba(255, 255, 255, 0.97);
+  --veil: rgba(255, 255, 255, 0.88);
+  --veil-strong: rgba(255, 255, 255, 0.92);
+  --hover: #f4f4f4;
+  --hover-soft: rgba(0, 0, 0, 0.035);
+  --active: #f3f3f3;
+  --marker: #d0352b;
   --font: 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   color-scheme: light;
+}
+
+/* Dark: night sand. Pale grains on near-black, same restraint. */
+:root[data-theme='dark'] {
+  --paper: #0f0f10;
+  --ink: #e9e9e6;
+  --ink-2: #c2c2be;
+  --ink-3: #8c8c88;
+  --ink-4: #5b5b58;
+  --line: #242425;
+  --line-2: #333335;
+  --ok: #8c8c88;
+  --warn: #c9a14e;
+  --off: #d77a69;
+  --ink-rgb: 233, 233, 230;
+  --on-ink: #111111;
+  --ink-hover: #cfcfcb;
+  --panel: rgba(21, 21, 22, 0.97);
+  --veil: rgba(15, 15, 16, 0.88);
+  --veil-strong: rgba(15, 15, 16, 0.92);
+  --hover: #1c1c1d;
+  --hover-soft: rgba(255, 255, 255, 0.06);
+  --active: #242426;
+  --marker: #ff5a4a;
+  color-scheme: dark;
 }
 
 * {
@@ -112,7 +147,7 @@ button {
   position: absolute;
   left: max(20px, env(safe-area-inset-left));
   bottom: max(34px, calc(env(safe-area-inset-bottom) + 24px));
-  background: #fff;
+  background: var(--paper);
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -143,7 +178,7 @@ button {
 .icon-btn:hover,
 .icon-btn[aria-pressed='true'] {
   color: var(--ink);
-  background: rgba(0, 0, 0, 0.035);
+  background: var(--hover-soft);
 }
 .icon-btn--small {
   width: 22px;
@@ -182,7 +217,7 @@ button {
   pointer-events: none;
   font-variant-numeric: tabular-nums;
   /* Stays legible when the sand bed rises behind it. */
-  text-shadow: 0 0 3px #fff, 0 0 6px #fff;
+  text-shadow: 0 0 3px var(--paper), 0 0 6px var(--paper);
 }
 .statusbar__conn {
   margin-left: auto;
@@ -218,7 +253,7 @@ button {
   max-width: min(560px, calc(100vw - 180px));
   font-size: 12.5px;
   color: var(--ink-2);
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--veil-strong);
   padding: 4px 6px 4px 10px;
   border-radius: 999px;
 }
@@ -265,17 +300,17 @@ button {
   padding: 7px 12px;
   border-radius: 6px;
   background: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
   font-size: 13px;
   text-decoration: none;
 }
 .btn:hover {
-  background: #2a2a2a;
+  background: var(--ink-hover);
 }
 
 .chip {
   border: 1px solid var(--line-2);
-  background: #fff;
+  background: var(--paper);
   border-radius: 999px;
   padding: 4px 10px;
   font-size: 12.5px;
@@ -288,7 +323,7 @@ button {
 .chip--on {
   background: var(--ink);
   border-color: var(--ink);
-  color: #fff;
+  color: var(--on-ink);
 }
 .chips {
   display: flex;
@@ -302,7 +337,7 @@ button {
   border: 1px solid var(--line-2);
   border-radius: 6px;
   font: inherit;
-  background: #fff;
+  background: var(--paper);
 }
 .input:focus {
   outline: none;
@@ -328,7 +363,7 @@ button {
   cursor: pointer;
 }
 .segmented button.is-on {
-  background: #f3f3f3;
+  background: var(--active);
   color: var(--ink);
 }
 .segmented--small {
@@ -389,7 +424,7 @@ button {
   width: 13px;
   height: 13px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--paper);
   transition: transform 0.2s;
 }
 .toggle input:checked {
@@ -417,7 +452,7 @@ button {
   bottom: 40px;
   width: min(380px, calc(100vw - 24px));
   overflow-y: auto;
-  background: rgba(255, 255, 255, 0.97);
+  background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 16px 18px 20px;
@@ -485,7 +520,7 @@ button {
   padding: 4px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--paper);
 }
 .city-search__list button {
   width: 100%;
@@ -498,7 +533,7 @@ button {
   font-size: 13px;
 }
 .city-search__list button.is-active {
-  background: #f4f4f4;
+  background: var(--hover);
 }
 
 .recent {
@@ -518,7 +553,7 @@ button {
   cursor: pointer;
 }
 .recent button:hover {
-  background: #f7f7f7;
+  background: var(--hover);
 }
 .recent__dot {
   flex: none;
@@ -554,7 +589,7 @@ button {
   position: absolute;
   max-height: calc(100vh - 100px);
   overflow-y: auto;
-  background: rgba(255, 255, 255, 0.97);
+  background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 14px 16px 16px;
@@ -593,11 +628,11 @@ button {
   overflow: visible;
 }
 .leader line {
-  stroke: rgba(17, 17, 17, 0.32);
+  stroke: rgba(var(--ink-rgb), 0.32);
   stroke-width: 1;
 }
 .leader circle {
-  fill: rgba(17, 17, 17, 0.45);
+  fill: rgba(var(--ink-rgb), 0.45);
 }
 .details__head {
   display: flex;
@@ -753,7 +788,7 @@ button {
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(255, 255, 255, 0.86);
+  background: var(--veil);
   backdrop-filter: blur(2px);
   padding: 24px;
 }
@@ -784,7 +819,7 @@ button {
   width: min(520px, 100%);
   max-height: 85vh;
   overflow-y: auto;
-  background: #fff;
+  background: var(--paper);
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 16px 20px 20px;
@@ -843,7 +878,7 @@ button {
   width: min(320px, calc(100vw - 24px));
   max-height: calc(100vh - 110px);
   overflow-y: auto;
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--panel);
   border: 1px dashed var(--line-2);
   border-radius: 10px;
   padding: 12px 14px 14px;
@@ -961,7 +996,7 @@ button {
   top: 56px;
   left: 12px;
   border: 1px dashed var(--line-2);
-  background: #fff;
+  background: var(--paper);
   border-radius: 6px;
   padding: 3px 8px;
   font-size: 11px;
@@ -990,12 +1025,12 @@ button {
   overflow: visible;
 }
 .map-marker__dot {
-  fill: #d0352b;
+  fill: var(--marker);
 }
 /* A single soft ring that breathes outward: noticeable, never alarming. */
 .map-marker__pulse {
   fill: none;
-  stroke: #d0352b;
+  stroke: var(--marker);
   stroke-width: 1;
   transform-box: fill-box;
   transform-origin: center;
@@ -1029,4 +1064,246 @@ button {
     transform: scale(2);
     opacity: 0.35;
   }
+}
+
+/* ------------------------------------------------- login + questionnaire */
+
+.auth,
+.questionnaire {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow-y: auto;
+  background: var(--veil);
+  backdrop-filter: blur(2px);
+}
+.auth__inner {
+  width: min(380px, 100%);
+}
+.questionnaire__inner {
+  width: min(560px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.field {
+  display: grid;
+  gap: 4px;
+  margin: 12px 0;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.auth__submit {
+  border: 0;
+  width: 100%;
+  justify-content: center;
+  margin: 8px 0 12px;
+  cursor: pointer;
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+button.btn {
+  border: 0;
+  cursor: pointer;
+}
+.auth__error {
+  color: var(--off);
+  font-size: 12.5px;
+  margin: 6px 0;
+}
+.auth__offline {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  color: var(--off);
+  z-index: 2;
+}
+.q-progress {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  margin: -16px 0 18px;
+}
+.q-choice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin: 10px 0 14px;
+}
+.q-confirm {
+  margin: 10px 0 14px;
+}
+.q-current {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.q-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.q-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+.q-row .segmented {
+  margin: 0;
+  flex: 0 1 330px;
+}
+.q-places {
+  margin: 8px 0 12px;
+}
+.q-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.q-nav__right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.account-actions {
+  margin-top: 8px;
+}
+.account-form {
+  margin-top: 8px;
+}
+
+/* Importance dots (categories step): 5 grains of growing size per row. */
+.q-legend,
+.q-dots {
+  display: grid;
+  grid-template-columns: repeat(5, 46px);
+  justify-items: center;
+  align-items: center;
+}
+.q-legend {
+  justify-content: end;
+  font-size: 9px;
+  color: var(--ink-3);
+  margin: 0 0 4px;
+  text-align: center;
+  line-height: 1.1;
+}
+.q-legend span {
+  width: 46px;
+  hyphens: auto;
+}
+.q-row.q-row--dots {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 1px 0;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--line);
+}
+.q-dot {
+  width: 46px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.q-dot:hover {
+  background: var(--hover);
+}
+.q-dot span {
+  display: block;
+  border-radius: 50%;
+  background: var(--line-2);
+}
+.q-dot--0 span {
+  width: 11px;
+  height: 11px;
+  background: none;
+  border: 1.5px solid var(--line-2);
+}
+.q-dot--1 span { width: 6px; height: 6px; }
+.q-dot--2 span { width: 10px; height: 10px; }
+.q-dot--3 span { width: 14px; height: 14px; }
+.q-dot--4 span { width: 19px; height: 19px; }
+.q-dot.is-on span {
+  background: var(--ink);
+}
+.q-dot--0.is-on span {
+  background: none;
+  border-color: var(--ink);
+}
+@media (max-width: 480px) {
+  .questionnaire,
+  .auth {
+    padding: 16px;
+  }
+  .q-legend,
+  .q-dots {
+    grid-template-columns: repeat(5, 42px);
+  }
+  .q-legend span,
+  .q-dot {
+    width: 42px;
+  }
+}
+.questionnaire__inner {
+  overflow-x: hidden;
+}
+
+/* Seen / new / saved, in lists and panels. */
+.recent li.is-seen .recent__title {
+  color: var(--ink-3);
+}
+.recent li.is-fresh .recent__dot span {
+  box-shadow: 0 0 0 2px var(--paper), 0 0 0 3px rgba(var(--ink-rgb), 0.45);
+}
+.chip--save {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.chip--save svg {
+  width: 12px;
+  height: 12px;
+}
+.saved__item {
+  display: grid;
+  gap: 2px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.saved__open {
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  text-decoration: none;
+}
+.saved__open:hover .recent__title {
+  text-decoration: underline;
+  text-decoration-color: var(--ink-4);
+}
+.saved__remove {
+  justify-self: start;
+  font-size: 11.5px;
 }

@@ -23,6 +23,7 @@ export interface Prefs {
   sound: boolean;
   criticalAlerts: boolean;
   showMap: boolean;
+  theme: 'auto' | 'light' | 'dark';
 }
 
 export const DEFAULT_PREFS: Prefs = {
@@ -40,6 +41,7 @@ export const DEFAULT_PREFS: Prefs = {
   sound: false,
   criticalAlerts: true,
   showMap: true,
+  theme: 'auto',
 };
 
 const KEY = 'sand:prefs:v1';
@@ -82,6 +84,7 @@ export function sanitizePrefs(raw: unknown): Prefs {
     sound: r.sound === true,
     criticalAlerts: typeof r.criticalAlerts === 'boolean' ? r.criticalAlerts : true,
     showMap: typeof r.showMap === 'boolean' ? r.showMap : true,
+    theme: ['auto', 'light', 'dark'].includes(r.theme) ? r.theme : 'auto',
   };
 }
 

@@ -27,3 +27,9 @@ export const IconExternal = () => (
     <path d="M6 3H3v10h10v-3M9 3h4v4M13 3 7 9" />
   </svg>
 );
+
+export const IconBookmark = ({ filled = false }: { filled?: boolean }) => (
+  <svg {...base}>
+    <path d="M4.5 2.5h7v11L8 10.8 4.5 13.5z" fill={filled ? 'currentColor' : 'none'} />
+  </svg>
+);

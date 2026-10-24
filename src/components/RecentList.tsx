@@ -7,12 +7,14 @@ import { IconClose } from './icons';
 interface Props {
   store: SandStore;
   ui: UiState;
+  viewed?: Set<string>;
+  savedIds?: Set<string>;
   onOpen: (eventId: string) => void;
   onClose: () => void;
 }
 
 /** On-demand list: the keyboard-accessible way to reach every grain. */
-export function RecentList({ store, ui, onOpen, onClose }: Props) {
+export function RecentList({ store, ui, viewed, savedIds, onOpen, onClose }: Props) {
   const [order, setOrder] = useState<'time' | 'impact'>('time');
   const headRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => headRef.current?.focus(), []);
@@ -53,9 +55,11 @@ export function RecentList({ store, ui, onOpen, onClose }: Props) {
       ) : (
         <ul className="recent">
           {items.map(({ e, i }) => {
-            const r = Math.max(1.5, scoreToRadius(i.score));
+            const r = Math.max(1.5, scoreToRadius(i.score) / 5);
+            const seen = viewed?.has(e.id) ?? false;
+            const fresh = !seen && Date.now() - Date.parse(e.publishedAt ?? e.firstSeenAt) < 60 * 60_000;
             return (
-              <li key={e.id}>
+              <li key={e.id} className={seen ? 'is-seen' : fresh ? 'is-fresh' : ''}>
                 <button onClick={() => onOpen(e.id)}>
                   <span className="recent__dot" aria-hidden="true">
                     <span style={{ width: r * 2, height: r * 2 }} />
@@ -63,7 +67,10 @@ export function RecentList({ store, ui, onOpen, onClose }: Props) {
                   <span className="recent__text">
                     <span className="recent__title">{e.title}</span>
                     <span className="recent__meta">
+                      {fresh ? 'nova · ' : ''}
                       {e.sourceName} · {formatRelative(e.publishedAt ?? e.firstSeenAt)} · impacto {i.score}
+                      {seen ? ' · vista' : ''}
+                      {savedIds?.has(e.id) ? ' · salva' : ''}
                       {e.demo ? ' · DEMO' : ''}
                     </span>
                   </span>

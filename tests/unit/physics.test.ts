@@ -183,7 +183,8 @@ describe('physics engine', () => {
       const s = Math.random() * 100;
       e.add(createParticle({ eventId: 'p' + i, x: 40 + Math.random() * 1200, y: -i * 6, r: productionRadius(s), impact: s, critical: false, bornAt: 0 }));
     }
-    for (let i = 0; i < 60 * 60; i++) e.step(dt);
+    // 400 large grains dropped within seconds: give the pile time to finish rolling.
+    for (let i = 0; i < 90 * 60; i++) e.step(dt);
     expect(e.actives.length).toBeLessThan(10);
     expect(e.bedHeightPx).toBeLessThanOrEqual(800 * 0.45);
     // No grain may ever rest inside another one.

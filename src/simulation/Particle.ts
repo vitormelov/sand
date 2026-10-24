@@ -30,6 +30,8 @@ export interface Particle {
   fadeAt?: number;
   /** 0..1 opacity from age: 1 = just published, 0 = gone. */
   tone: number;
+  /** The user already opened this news. */
+  viewed: boolean;
   /** 0..1 fade-in. */
   alpha: number;
   /** Phase for the gentle sideways flutter of light grains. */
@@ -80,6 +82,7 @@ export function createParticle(init: {
     newsAt: init.newsAt,
     fadeAt: init.fadeAt,
     tone: 1,
+    viewed: false,
     alpha: 0,
     phase: Math.random() * Math.PI * 2,
     onFloor: false,

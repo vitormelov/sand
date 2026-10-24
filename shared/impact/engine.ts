@@ -1,6 +1,8 @@
 import { countryInfo, mentionsName, brUfFromName, regionOfCountry } from '../geo/gazetteer';
 import { clamp, haversineKm, normalizeForMatch } from '../text';
+import type { ProfileAnswers } from '../profile';
 import type { Category, GeoRef, NewsEvent, UserLocation, UserProfile } from '../types';
+import { answeredInterest, avoidedReason, channelBoost, clubMentioned, contextMultipliers } from './personal';
 import {
   CHANNEL_PRACTICAL_WEIGHT,
   IMPACT_BANDS,
@@ -9,6 +11,7 @@ import {
   LOCAL_ACTING_CHANNELS,
   LOCAL_ACTING_EXPONENT,
   NO_CHANNEL_PRACTICAL,
+  PERSONAL,
   PROXIMITY,
   RECENCY_HALF_LIFE_HOURS,
   RULES,
@@ -171,10 +174,12 @@ function bandOf(score: number) {
   return IMPACT_BANDS.find((b) => score < b.max) ?? IMPACT_BANDS[IMPACT_BANDS.length - 1];
 }
 
-export function computeImpact(input: ImpactInput, profile: UserProfile, now = Date.now()): ImpactResult {
+export function computeImpact(input: ImpactInput, profile: UserProfile & ProfileAnswers, now = Date.now()): ImpactResult {
   const a = input.analysis;
   const user = profile.location;
   const rules: string[] = [];
+  const text = `${input.title}
+${input.summary ?? ''}`;
 
   // --- Exposure -----------------------------------------------------------
   const locs = personalLocations(input, user);
@@ -187,6 +192,17 @@ export function computeImpact(input: ImpactInput, profile: UserProfile, now = Da
   } else {
     const localHazard = a.hazard && (a.affectedScope === 'local' || a.affectedScope === 'state');
     origin = locs.map((l) => proximityTo(user, l, localHazard)).reduce((b, p) => (p.value > b.value ? p : b));
+  }
+  // Other places the user cares about (family, work, study) count as nearby too, a bit less.
+  for (const place of profile.places ?? []) {
+    const pl = personalLocations(input, place);
+    if (pl.length === 0) continue;
+    const localHazard = a.hazard && (a.affectedScope === 'local' || a.affectedScope === 'state');
+    const best = pl.map((l) => proximityTo(place, l, localHazard)).reduce((b, p) => (p.value > b.value ? p : b));
+    const value = best.value * PERSONAL.placeWeight;
+    if (value > origin.value && best.value > PROXIMITY.sameWorldRegion) {
+      origin = { value, label: `perto de ${place.name}, um lugar importante para você`, place: best.place };
+    }
   }
 
   const maxStrength = a.channels.reduce((m, c) => Math.max(m, c.strength), 0);
@@ -233,14 +249,19 @@ export function computeImpact(input: ImpactInput, profile: UserProfile, now = Da
 
   // --- Practical consequence ---------------------------------------------
   // Local-acting channels (storms, violence...) decay faster with distance than systemic ones (prices, rates).
+  // Daily routine, work and finances make some channels matter more to this person.
+  const mults = contextMultipliers(profile);
   let practical = NO_CHANNEL_PRACTICAL * exposure;
   let topChannel: string | undefined;
+  let topWhy: string[] = [];
   for (const c of a.channels) {
     const reach = LOCAL_ACTING_CHANNELS.includes(c.channel) ? Math.pow(exposure, LOCAL_ACTING_EXPONENT) : exposure;
-    const v = CHANNEL_PRACTICAL_WEIGHT[c.channel] * c.strength * reach;
+    const boost = channelBoost(mults, c.channel);
+    const v = Math.min(1, CHANNEL_PRACTICAL_WEIGHT[c.channel] * boost.k) * c.strength * reach;
     if (v > practical) {
       practical = v;
       topChannel = c.channel;
+      topWhy = boost.k > 1 ? boost.why : [];
     }
   }
   practical = clamp(practical, 0, 1);
@@ -248,7 +269,9 @@ export function computeImpact(input: ImpactInput, profile: UserProfile, now = Da
   // --- Interest -----------------------------------------------------------
   const interests = profile.interests ?? [];
   const matched = a.categories.filter((c) => interests.includes(c));
-  const interest = interests.length === 0 ? INTEREST.neutralNoInterests : matched.length ? INTEREST.matched : INTEREST.unmatched;
+  const answered = answeredInterest(profile, a.categories);
+  const club = clubMentioned(profile, text);
+  const interest = club ? 1 : answered ? answered.value : interests.length === 0 ? INTEREST.neutralNoInterests : matched.length ? INTEREST.matched : INTEREST.unmatched;
   const affinityPoints = clamp(
     a.categories.slice(0, 2).reduce((s, c) => s + (profile.affinity?.[c] ?? 0), 0),
     -INTEREST.maxAffinityPoints,
@@ -268,11 +291,20 @@ export function computeImpact(input: ImpactInput, profile: UserProfile, now = Da
     urgency,
   };
   const details: Record<FactorKey, string> = {
-    practical: topChannel ? `pode afetar ${CHANNEL_LABEL[topChannel]}` : 'nenhuma consequência prática identificada',
+    practical: topChannel
+      ? `pode afetar ${CHANNEL_LABEL[topChannel]}${topWhy.length ? ` (pesa mais porque ${topWhy.join(' e ')})` : ''}`
+      : 'nenhuma consequência prática identificada',
     exposure: exposureLabel,
     severity: a.severityEvidence.length ? a.severityEvidence.slice(0, 3).join(', ') : 'sem indícios de gravidade elevada',
-    interest:
-      interests.length === 0 ? 'nenhum interesse selecionado' : matched.length ? `combina com: ${matched.map(categoryLabel).join(', ')}` : 'fora dos seus interesses',
+    interest: club
+      ? `menciona o seu time (${club})`
+      : answered
+        ? answered.detail
+        : interests.length === 0
+          ? 'nenhum interesse selecionado'
+          : matched.length
+            ? `combina com: ${matched.map(categoryLabel).join(', ')}`
+            : 'fora dos seus interesses',
     urgency: age < 1 ? 'muito recente' : age < 24 ? `há ~${Math.round(age)} h` : `há ~${Math.round(age / 24)} dia(s)`,
   };
 
@@ -300,8 +332,13 @@ export function computeImpact(input: ImpactInput, profile: UserProfile, now = Da
   // --- Special rules --------------------------------------------------------
   let urgent = false;
   const soft = a.channels.length === 0 && a.categories.every((c) => c === 'sports' || c === 'culture' || c === 'other');
-  if (soft && score > RULES.softNews.cap) {
-    score = RULES.softNews.cap;
+  if (club) {
+    score += PERSONAL.clubBonus;
+    rules.push(`notícia sobre o seu time (${club})`);
+  }
+  const softCap = club ? PERSONAL.clubSoftCap : RULES.softNews.cap;
+  if (soft && score > softCap) {
+    score = softCap;
     rules.push('notícia sem consequência prática identificada: tamanho limitado');
   }
   const em = RULES.emergency;
@@ -314,6 +351,12 @@ export function computeImpact(input: ImpactInput, profile: UserProfile, now = Da
   if (a.severity >= RULES.globalCatastrophe.minSeverity && a.affectedScope === 'global' && score < RULES.globalCatastrophe.floor) {
     score = RULES.globalCatastrophe.floor;
     rules.push('acontecimento de gravidade extrema com alcance global');
+  }
+  // Topics the user prefers to see less of shrink — but never an emergency near them.
+  const avoided = avoidedReason(profile, a, text);
+  if (avoided && !urgent) {
+    score *= PERSONAL.avoidFactor;
+    rules.push(`${avoided}: grão menor`);
   }
   if (!urgent && confidence < RULES.lowConfidence.maxConfidence && score > RULES.lowConfidence.cap) {
     score = RULES.lowConfidence.cap;

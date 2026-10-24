@@ -23,12 +23,21 @@ const app = createApp({
   maxSsePerIp: config.maxSsePerIp,
   corsOrigin: config.corsOrigin,
   llm: config.llm,
+  secureCookies: config.production && process.env.COOKIE_SECURE !== 'false',
 });
 
 await app.start(config.port, config.host);
 console.log(`SAND ${config.production ? 'app' : 'API'} on http://localhost:${config.port}${config.production ? '' : ' (interface: Vite, see the [web] output)'}`);
 for (const c of connectors) console.log(`  ${c.enabled ? '●' : '○'} ${c.name}${c.enabled ? '' : ` — ${c.disabledReason}`}`);
-console.log(`  IA: ${config.llm.anthropicKey ? `ativada (${config.llm.model})` : 'desativada (ANTHROPIC_API_KEY ausente) — classificação por regras'}`);
+console.log(
+  `  IA: ${
+    config.llm.anthropicKey
+      ? `ativada (${config.llm.model}, até ${config.llm.maxCallsPerHour} chamadas/h)`
+      : config.llm.enabled
+        ? 'LLM_ENABLED=true, mas ANTHROPIC_API_KEY ausente — classificação só por regras'
+        : 'desativada (LLM_ENABLED=false) — classificação só por regras, zero tokens'
+  }`,
+);
 
 const shutdown = async () => {
   console.log('\nencerrando…');

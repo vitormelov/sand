@@ -67,6 +67,24 @@ Ajustes de análise no servidor que também afetam o tamanho:
 - **Crime resolvido** ("preso", "condenado", "apreendido"): o canal de segurança física cai 55% — é notícia de justiça, não risco em andamento.
 - **Incidente isolado** (sem vítimas contadas e sem sinais de violência contínua): canal de segurança × 0,7.
 
+## Respostas do questionário
+
+Código: [`shared/impact/personal.ts`](../shared/impact/personal.ts); números em `PERSONAL` (`config.ts`).
+
+| Resposta | Efeito |
+|---|---|
+| Importância da categoria (não quero / pouco / normal / importante / muito) | fator de interesse 0 / 0,15 / 0,5 / 0,8 / 1 |
+| Futebol: não / um pouco / sim | esportes vira "não quero" / normal / importante |
+| Time do coração mencionado | interesse máximo, +8 pts e teto de notícia leve sobe de 35 para 50 |
+| Transporte: carro / moto / ônibus-metrô / aplicativo / bicicleta-a pé | multiplica o peso dos canais energia-combustíveis, mobilidade, infraestrutura, meio ambiente (ex.: ônibus → mobilidade ×1,4; carro → combustíveis ×1,3) |
+| Mora de aluguel / filhos em idade escolar | custo de vida ×1,15 / educação ×1,6 e saúde ×1,1 |
+| Ocupação | CLT → emprego ×1,25; servidor → leis ×1,25; autônomo → juros ×1,15…; estudante → educação ×1,5; aposentado → emprego/INSS ×1,3 e saúde ×1,2; procurando emprego → emprego ×1,45 |
+| Financiamento/dívidas, investimentos, benefício social | juros ×1,4 / juros ×1,2 / emprego ×1,3 e custo de vida ×1,15 |
+| Outros lugares importantes | contam como proximidade × 0,85 |
+| Temas para ver menos (violência, política partidária, celebridades) | score × 0,6 — **nunca** em emergências perto do usuário |
+
+Multiplicadores combinam por canal, limitados a 0,7–1,6, e o peso final do canal nunca passa de 1. O painel de detalhes mostra o motivo (ex.: "pesa mais porque você usa transporte público").
+
 ## Relações entre eventos
 
 [`server/clustering/relations.ts`](../server/clustering/relations.ts). Uma tabela de transmissões plausíveis (ex.: `energy_fuel → cost_of_living`) é cruzada com evidência textual:

@@ -22,28 +22,31 @@ export function PrivacyDialog({ onClose }: { onClose: () => void }) {
         </div>
         <ul className="plain-list privacy">
           <li>
-            <strong>Sua cidade e seus interesses ficam neste navegador</strong> (localStorage). O cálculo de impacto acontece aqui, no seu dispositivo; o servidor envia as mesmas notícias para todos.
+            <strong>Conta:</strong> guardamos seu e-mail e um <em>hash</em> da senha (a senha em si nunca é armazenada). A sessão usa um cookie seguro, válido por 30 dias.
           </li>
           <li>
-            <strong>Sem GPS.</strong> Guardamos só o nome da cidade e o centro aproximado dela (precisão de ~11 km).
+            <strong>Suas respostas</strong> (cidade, interesses, futebol, rotina, trabalho e finanças, outros lugares, temas a evitar) ficam na sua conta e servem só para estimar o impacto das notícias para você. Todas são opcionais, exceto a cidade.
           </li>
           <li>
-            <strong>Busca de cidade:</strong> o texto digitado é enviado ao servidor do SAND, que consulta o serviço de geocodificação Open-Meteo. Nada mais é enviado.
+            <strong>O cálculo de impacto acontece no seu navegador.</strong> O servidor envia as mesmas notícias para todos e não usa suas respostas para nada além de devolvê-las a você.
           </li>
           <li>
-            <strong>Feedback “relevante / não relevante”:</strong> fica salvo neste navegador para ajustar estimativas futuras. Ao servidor vai apenas a contagem anônima por notícia.
+            <strong>Localização:</strong> guardamos só a cidade e o centro aproximado dela (precisão de ~11 km). Se você usar o GPS, a posição é arredondada no seu navegador antes de sair dele; o servidor consulta o OpenStreetMap (Nominatim) para descobrir a cidade. A busca por nome usa o Open-Meteo.
           </li>
           <li>
-            <strong>Sem contas, anúncios, analytics ou rastreadores.</strong> Links para matérias abrem o site original, que tem sua própria política.
+            <strong>Notícias vistas e salvas:</strong> ficam na sua conta. As marcas de “vista” somem junto com as notícias (~96 h); as salvas guardam título, fonte, link e data até você removê-las.
           </li>
           <li>
-            <strong>Retenção:</strong> notícias são mantidas no servidor por cerca de 48 horas e depois apagadas.
+            <strong>Feedback “relevante / não relevante”:</strong> ajusta suas estimativas futuras; ao servidor de notícias vai só uma contagem anônima por notícia.
           </li>
           <li>
-            <strong>Fontes:</strong> feeds públicos (Agência Brasil, g1, BBC, DW, The Guardian), dados oficiais (USGS, GDACS, INMET) e, se configurados, GDELT/NewsAPI. Estimativas de impacto são automáticas e podem errar.
+            <strong>Sem anúncios, analytics ou rastreadores.</strong> Links para matérias abrem o site original, que tem sua própria política.
+          </li>
+          <li>
+            <strong>Retenção:</strong> notícias ficam ~48 horas no servidor. Sua conta fica até você excluí-la em Configurações → Conta → Excluir conta, o que apaga tudo imediatamente.
           </li>
         </ul>
-        <p className="hint">Você pode apagar tudo em Configurações → Limpar preferências locais.</p>
+        <p className="hint">Preferências visuais (velocidade, mapa, som etc.) ficam só neste navegador e podem ser apagadas em Configurações → Limpar preferências locais.</p>
       </div>
     </div>
   );

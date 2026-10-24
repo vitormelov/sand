@@ -22,6 +22,7 @@ export class Store {
     this.db = new DatabaseSync(path);
     this.db.exec(`
       PRAGMA journal_mode = WAL;
+      PRAGMA foreign_keys = ON;
       PRAGMA synchronous = NORMAL;
       CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS articles (
@@ -44,6 +45,31 @@ export class Store {
       CREATE INDEX IF NOT EXISTS events_seq ON events(seq);
       CREATE INDEX IF NOT EXISTS events_expires ON events(expires_at);
       CREATE TABLE IF NOT EXISTS source_state (id TEXT PRIMARY KEY, data TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS sessions (
+        token_digest TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        expires_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);
+      CREATE TABLE IF NOT EXISTS user_items (
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL,
+        item_id TEXT NOT NULL,
+        data TEXT,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, kind, item_id)
+      );
+      CREATE TABLE IF NOT EXISTS profiles (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        data TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS feedback (
         event_id TEXT NOT NULL,
         value TEXT NOT NULL,
@@ -51,6 +77,99 @@ export class Store {
         PRIMARY KEY (event_id, value)
       );
     `);
+  }
+
+  // ------------------------------------------------------------- accounts
+
+  createUser(id: string, email: string, passwordHash: string, nowIso: string): boolean {
+    try {
+      this.db.prepare(`INSERT INTO users(id, email, password_hash, created_at) VALUES(?,?,?,?)`).run(id, email, passwordHash, nowIso);
+      return true;
+    } catch {
+      return false; // email already registered
+    }
+  }
+
+  userByEmail(email: string): { id: string; email: string; passwordHash: string } | undefined {
+    const r = this.db.prepare(`SELECT id, email, password_hash FROM users WHERE email = ?`).get(email) as { id: string; email: string; password_hash: string } | undefined;
+    return r ? { id: r.id, email: r.email, passwordHash: r.password_hash } : undefined;
+  }
+
+  userById(id: string): { id: string; email: string; passwordHash: string } | undefined {
+    const r = this.db.prepare(`SELECT id, email, password_hash FROM users WHERE id = ?`).get(id) as { id: string; email: string; password_hash: string } | undefined;
+    return r ? { id: r.id, email: r.email, passwordHash: r.password_hash } : undefined;
+  }
+
+  setPasswordHash(userId: string, hash: string): void {
+    this.db.prepare(`UPDATE users SET password_hash = ? WHERE id = ?`).run(hash, userId);
+  }
+
+  /** Deletes the account and everything attached to it (sessions, answers). */
+  deleteUser(userId: string): void {
+    this.db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(userId);
+    this.db.prepare(`DELETE FROM profiles WHERE user_id = ?`).run(userId);
+    this.db.prepare(`DELETE FROM user_items WHERE user_id = ?`).run(userId);
+    this.db.prepare(`DELETE FROM users WHERE id = ?`).run(userId);
+  }
+
+  createSession(digest: string, userId: string, expiresIso: string): void {
+    this.db.prepare(`INSERT INTO sessions(token_digest, user_id, expires_at) VALUES(?,?,?)`).run(digest, userId, expiresIso);
+  }
+
+  sessionUser(digest: string, nowIso: string): string | undefined {
+    const r = this.db.prepare(`SELECT user_id FROM sessions WHERE token_digest = ? AND expires_at > ?`).get(digest, nowIso) as { user_id: string } | undefined;
+    return r?.user_id;
+  }
+
+  deleteSession(digest: string): void {
+    this.db.prepare(`DELETE FROM sessions WHERE token_digest = ?`).run(digest);
+  }
+
+  deleteSessionsOf(userId: string, exceptDigest?: string): void {
+    this.db.prepare(`DELETE FROM sessions WHERE user_id = ? AND token_digest != ?`).run(userId, exceptDigest ?? '');
+  }
+
+  purgeSessions(nowIso: string): void {
+    this.db.prepare(`DELETE FROM sessions WHERE expires_at <= ?`).run(nowIso);
+  }
+
+  getProfile(userId: string): unknown {
+    const r = this.db.prepare(`SELECT data FROM profiles WHERE user_id = ?`).get(userId) as { data: string } | undefined;
+    return r ? JSON.parse(r.data) : undefined;
+  }
+
+  setProfile(userId: string, data: unknown, nowIso: string): void {
+    this.db
+      .prepare(`INSERT INTO profiles(user_id, data, updated_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`)
+      .run(userId, JSON.stringify(data), nowIso);
+  }
+
+  // --------------------------------------------------- seen / saved news
+
+  addItem(userId: string, kind: 'viewed' | 'saved', itemId: string, data: unknown, nowIso: string): void {
+    this.db
+      .prepare(`INSERT INTO user_items(user_id, kind, item_id, data, created_at) VALUES(?,?,?,?,?) ON CONFLICT(user_id, kind, item_id) DO UPDATE SET data = excluded.data`)
+      .run(userId, kind, itemId, data == null ? null : JSON.stringify(data), nowIso);
+  }
+
+  removeItem(userId: string, kind: 'viewed' | 'saved', itemId: string): void {
+    this.db.prepare(`DELETE FROM user_items WHERE user_id = ? AND kind = ? AND item_id = ?`).run(userId, kind, itemId);
+  }
+
+  items(userId: string, kind: 'viewed' | 'saved', limit: number): { id: string; data: unknown; createdAt: string }[] {
+    const rows = this.db
+      .prepare(`SELECT item_id, data, created_at FROM user_items WHERE user_id = ? AND kind = ? ORDER BY created_at DESC LIMIT ?`)
+      .all(userId, kind, limit) as { item_id: string; data: string | null; created_at: string }[];
+    return rows.map((r) => ({ id: r.item_id, data: r.data ? JSON.parse(r.data) : null, createdAt: r.created_at }));
+  }
+
+  countItems(userId: string, kind: 'viewed' | 'saved'): number {
+    return (this.db.prepare(`SELECT COUNT(*) AS n FROM user_items WHERE user_id = ? AND kind = ?`).get(userId, kind) as { n: number }).n;
+  }
+
+  /** "Seen" marks only matter while the news is in the sand. */
+  purgeViewed(beforeIso: string): void {
+    this.db.prepare(`DELETE FROM user_items WHERE kind = 'viewed' AND created_at < ?`).run(beforeIso);
   }
 
   close(): void {

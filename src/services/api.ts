@@ -12,7 +12,7 @@ export async function sendFeedback(eventId: string, value: FeedbackValue): Promi
   try {
     await fetch('/api/feedback', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Sand': '1' },
       body: JSON.stringify({ eventId, value }),
     });
   } catch {
