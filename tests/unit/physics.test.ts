@@ -13,6 +13,7 @@ const scoreToRadius = makeRadiusFn([
 ]);
 import { createParticle, type Particle } from '../../src/simulation/Particle';
 import { DEFAULT_PHYSICS, PhysicsEngine } from '../../src/simulation/PhysicsEngine';
+import { toneFor } from '../../src/simulation/SandSimulation';
 
 const W = 400;
 const H = 300;
@@ -217,5 +218,35 @@ describe('physics engine', () => {
     const width = Math.max(...all.map((p) => p.x + p.r)) - Math.min(...all.map((p) => p.x - p.r));
     expect(width).toBeGreaterThan(height * 1.5); // a mound, never a column
     expect(height).toBeLessThan(r * 2 * 4); // at most ~4 grains high
+  });
+
+  it('age shading: fresh news is solid, older news lighter, gone at the end of its life', () => {
+    const now = Date.now();
+    const life = 48 * 3_600_000;
+    const at = (hoursAgo: number) => toneFor(now - hoursAgo * 3_600_000, now - hoursAgo * 3_600_000 + life, now);
+    expect(at(0)).toBe(1);
+    expect(at(12)).toBeGreaterThan(at(24));
+    expect(at(24)).toBeGreaterThan(at(42));
+    expect(at(48)).toBe(0);
+    expect(toneFor(undefined, undefined, now)).toBe(1); // no timing → no shading
+  });
+
+  it('a released (faded) grain leaves the sand and what rested on it slides down', () => {
+    const e = new PhysicsEngine(400, 300, { ...DEFAULT_PHYSICS, ambientMotion: false });
+    e.setMaxRadius(productionRadius(100));
+    const r = productionRadius(40);
+    const left = createParticle({ eventId: 'l', x: 200 - r, y: 300 - r, r, impact: 40, critical: false, bornAt: 0 });
+    const right = createParticle({ eventId: 'r', x: 200 + r, y: 300 - r, r, impact: 40, critical: false, bornAt: 0 });
+    e.add(left);
+    e.add(right);
+    for (let i = 0; i < 120; i++) e.step(dt);
+    const top = createParticle({ eventId: 't', x: 200, y: -r, r, impact: 40, critical: false, bornAt: e.time });
+    e.add(top);
+    for (let i = 0; i < 60 * 8; i++) e.step(dt);
+    expect(e.statics.has(top)).toBe(true); // resting in the pocket
+    e.release(right);
+    for (let i = 0; i < 60 * 10; i++) e.step(dt);
+    expect(right.state).toBe('removed');
+    expect(top.y + top.r).toBeCloseTo(300, 0); // slid down to the floor
   });
 });

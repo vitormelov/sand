@@ -25,6 +25,11 @@ export interface Particle {
   restTimer: number;
   impact: number;
   critical: boolean;
+  /** Wall-clock ms of the news and of its complete fade-out (age shading). */
+  newsAt?: number;
+  fadeAt?: number;
+  /** 0..1 opacity from age: 1 = just published, 0 = gone. */
+  tone: number;
   /** 0..1 fade-in. */
   alpha: number;
   /** Phase for the gentle sideways flutter of light grains. */
@@ -51,6 +56,8 @@ export function createParticle(init: {
   impact: number;
   critical: boolean;
   bornAt: number;
+  newsAt?: number;
+  fadeAt?: number;
   vx?: number;
   vy?: number;
 }): Particle {
@@ -70,6 +77,9 @@ export function createParticle(init: {
     restTimer: 0,
     impact: init.impact,
     critical: init.critical,
+    newsAt: init.newsAt,
+    fadeAt: init.fadeAt,
+    tone: 1,
     alpha: 0,
     phase: Math.random() * Math.PI * 2,
     onFloor: false,

@@ -2,7 +2,7 @@
 
 Notícias reais caem como areia. Cada grão é um acontecimento; o tamanho estima o **impacto potencial na vida de quem observa**, a partir da cidade que a pessoa informou.
 
-Fundo branco com um mapa-múndi em traço fino, grãos pretos, gravidade, colisões, acúmulo como areia. Sem feed, sem manchetes fixas, sem alarmes. Clique num grão para ver a matéria original, por que ela tem aquele tamanho e com que confiança.
+Fundo branco com um mapa-múndi em traço fino, grãos pretos que clareiam com a idade da notícia até sumir, gravidade, colisões, acúmulo como areia. Sem feed, sem manchetes fixas, sem alarmes. Clique num grão para ver a matéria original, por que ela tem aquele tamanho e com que confiança.
 
 ---
 

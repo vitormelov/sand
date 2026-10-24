@@ -364,7 +364,7 @@ export class PhysicsEngine {
   }
 
   /** Is a deposited grain still resting on something? */
-  hasSupport(s: Particle): boolean {
+  hasSupport(s: Particle, strict = false): boolean {
     if (s.y + s.r >= this.height - SUPPORT_SLOP) return true;
     let L = s.x - s.r <= SUPPORT_SLOP;
     let R = s.x + s.r >= this.width - SUPPORT_SLOP;
@@ -386,7 +386,7 @@ export class PhysicsEngine {
     });
     // Supported unless perched on top of a single grain or floating. A grain carried and held
     // on one side is blocked, not perched: waking it would only make it twitch.
-    return pinned || (U && (L || R));
+    return pinned || (U && (strict ? L && R : L || R));
   }
 
   private processWakes(): void {
@@ -439,6 +439,7 @@ export class PhysicsEngine {
 
   private sweepTimer = 0;
   private recent: Particle[] = [];
+  private disturbed: Particle[] = [];
 
   /**
    * Deposited grains that lost their support (neighbours slid away, sizes changed
@@ -447,12 +448,19 @@ export class PhysicsEngine {
    */
   private sweepStability(dt: number): void {
     this.sweepTimer -= dt;
-    if (this.sweepTimer > 0 || this.statics.size === 0) return;
+    if ((this.sweepTimer > 0 && this.disturbed.length === 0) || this.statics.size === 0) return;
     this.sweepTimer = 0.25;
     const arr = [...this.statics];
     const sample = this.recent.splice(0);
     for (let i = 0; i < Math.min(30, arr.length); i++) sample.push(arr[(Math.random() * arr.length) | 0]);
     const woken: Particle[] = [];
+    for (const s of this.disturbed.splice(0)) {
+      if (this.actives.length >= this.config.maxActive) break;
+      if (this.statics.has(s) && !this.hasSupport(s, true)) {
+        this.wake(s, 0, 0);
+        woken.push(s);
+      }
+    }
     for (const s of sample) {
       if (this.actives.length >= this.config.maxActive) break;
       if (this.statics.has(s) && !this.hasSupport(s)) {
@@ -594,6 +602,21 @@ export class PhysicsEngine {
     this.config.ambientMotion = ambient;
     if (this.actives.length) this.deposit(p); // safety net
     this.actives = saved;
+  }
+
+  /** Take one grain out of the world (faded away); grains it was holding up start to slide. */
+  release(p: Particle): void {
+    if (p.state === 'removed') return;
+    if (this.statics.has(p)) {
+      this.removeStatic(p);
+      this.staticGrid.query(p.x, p.y - p.r, p.r + this.maxR, (q) => {
+        if (q.y < p.y) this.disturbed.push(q); // lost a neighbour: must find a real pocket again
+      });
+      this.dirty = true;
+    } else {
+      this.actives = this.actives.filter((a) => a !== p);
+    }
+    p.state = 'removed';
   }
 
   clear(): void {

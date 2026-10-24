@@ -3,6 +3,9 @@ import type { PhysicsEngine } from './PhysicsEngine';
 
 const INK = '#111111';
 const TAU = Math.PI * 2;
+/** Must match SandSimulation.TONE_LEVELS: opacity is quantized so grains batch by level. */
+const LEVELS = 24;
+const level = (tone: number) => Math.max(1, Math.round(tone * LEVELS));
 
 /**
  * Canvas 2D renderer.
@@ -43,23 +46,38 @@ export class ParticleRenderer {
     const c = this.sctx;
     c.clearRect(0, 0, this.w, this.h);
     c.fillStyle = INK;
-    c.beginPath();
     const fadingSet = new Set(this.fading);
+    // One path per age level: older news is lighter. Lighter levels first, so fresh
+    // (dark) grains stay crisp where they overlap old ones.
+    const byLevel = new Map<number, Particle[]>();
     engine.forEachStatic((s) => {
       if (fadingSet.has(s)) return;
-      c.moveTo(s.x + s.r, s.y);
-      c.arc(s.x, s.y, s.r, 0, TAU);
+      const l = level(s.tone);
+      let list = byLevel.get(l);
+      if (!list) byLevel.set(l, (list = []));
+      list.push(s);
     });
-    c.fill();
+    for (const l of [...byLevel.keys()].sort((a, b) => a - b)) {
+      c.globalAlpha = l / LEVELS;
+      c.beginPath();
+      for (const s of byLevel.get(l)!) {
+        c.moveTo(s.x + s.r, s.y);
+        c.arc(s.x, s.y, s.r, 0, TAU);
+      }
+      c.fill();
+    }
+    c.globalAlpha = 1;
     this.bakes++;
   }
 
   private bakeOne(s: Particle): void {
     const c = this.sctx;
+    c.globalAlpha = level(s.tone) / LEVELS;
     c.fillStyle = INK;
     c.beginPath();
     c.arc(s.x, s.y, s.r, 0, TAU);
     c.fill();
+    c.globalAlpha = 1;
   }
 
   render(
@@ -96,7 +114,7 @@ export class ParticleRenderer {
 
     // Fading-in deposits (reduced-motion placement).
     for (const p of this.fading) {
-      c.globalAlpha = p.alpha;
+      c.globalAlpha = p.alpha * (level(p.tone) / LEVELS);
       c.fillStyle = INK;
       c.beginPath();
       c.arc(p.x, p.y, p.r, 0, TAU);
@@ -104,30 +122,16 @@ export class ParticleRenderer {
     }
     c.globalAlpha = 1;
 
-    // Falling grains, batched by opacity.
+    // Falling grains (few): each with its fade-in and age tone.
     c.fillStyle = INK;
-    c.beginPath();
-    let anyFaint = false;
     for (const p of engine.actives) {
       p.alpha = Math.min(1, p.alpha + opts.dt * 2.5);
-      if (p.alpha < 1) {
-        anyFaint = true;
-        continue;
-      }
-      c.moveTo(p.x + p.r, p.y);
+      c.globalAlpha = p.alpha * (level(p.tone) / LEVELS);
+      c.beginPath();
       c.arc(p.x, p.y, p.r, 0, TAU);
+      c.fill();
     }
-    c.fill();
-    if (anyFaint) {
-      for (const p of engine.actives) {
-        if (p.alpha >= 1) continue;
-        c.globalAlpha = p.alpha;
-        c.beginPath();
-        c.arc(p.x, p.y, p.r, 0, TAU);
-        c.fill();
-      }
-      c.globalAlpha = 1;
-    }
+    c.globalAlpha = 1;
 
     // Critical grains: a slow, faint halo — never a flash.
     if (opts.critical.length) {

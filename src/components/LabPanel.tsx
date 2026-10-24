@@ -178,6 +178,31 @@ export function LabPanel({ store, simRef, sizeScale }: Props) {
       </section>
 
       <section>
+        <h3>Idade das notícias</h3>
+        <p className="hint">Mais novas em preto; com o tempo clareiam até sumir ao fim das 48 h.</p>
+        <button
+          className="chip"
+          onClick={() => {
+            const start = window.innerWidth > 700 ? (340 + 24) / window.innerWidth : 0.06;
+            const ages = [0, 6, 12, 18, 24, 30, 36, 42];
+            ages.forEach((h, i) => {
+              const published = Date.now() - h * 3_600_000;
+              store.injectLab(
+                labEvent(`Notícia de ${h} h atrás`, {}, {
+                  publishedAt: new Date(published).toISOString(),
+                  firstSeenAt: new Date(published).toISOString(),
+                  expiresAt: new Date(published + 48 * 3_600_000).toISOString(),
+                }),
+                { forcedScore: 60, x: start + (i / (ages.length - 1)) * (0.94 - start) },
+              );
+            });
+          }}
+        >
+          Soltar grãos de 0 a 42 h
+        </button>
+      </section>
+
+      <section>
         <h3>Grão com impacto escolhido</h3>
         <label className="range">
           <span>Impacto</span>

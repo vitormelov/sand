@@ -6,7 +6,7 @@ Raio de 7 px (impacto 0) a 50 px (impacto 100) no desktop (7 · 10 · 14 · 20 �
 
 ## Aparência
 
-Grãos são círculos sólidos (#111); os depositados são desenhados uma vez num canvas de sedimento. Os canvases são renderizados a no mínimo 2× o tamanho CSS (até 3×) e reduzidos pelo navegador, para bordas lisas em monitores 1×; rebake de 1.500 grãos a 2×: ~0,8 ms. Atrás da areia, um mapa-múndi em traço fino (Natural Earth 1:110m, domínio público, via `world-atlas`), desenhado uma vez num canvas próprio e redesenhado só ao redimensionar; pode ser desligado em Configurações.
+Grãos são círculos pretos (#111) cuja **opacidade acompanha a idade da notícia**: sólidos ao serem publicados, clareando até sumir no fim da retenção (48 h; curva `(1 − vida)^0,8`, 24 níveis). A cada 15 s os tons são recalculados; grãos que somem saem da física e os que estavam apoiados neles escorregam. Os grãos depositados são desenhados uma vez num canvas de sedimento, agrupados por nível de tom. Os canvases são renderizados a no mínimo 2× o tamanho CSS (até 3×) e reduzidos pelo navegador, para bordas lisas em monitores 1×; rebake de 1.500 grãos a 2×: ~0,8 ms. Atrás da areia, um mapa-múndi em traço fino (Natural Earth 1:110m, domínio público, via `world-atlas`), desenhado uma vez num canvas próprio e redesenhado só ao redimensionar; pode ser desligado em Configurações.
 
 ## Como a física funciona
 

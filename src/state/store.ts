@@ -6,7 +6,10 @@ import type { NewsEvent, StreamEventMessage, StreamStatus, UserProfile } from '.
 export type Connection = 'connecting' | 'open' | 'reconnecting' | 'offline';
 
 export interface SpawnSink {
-  enqueue(req: { eventId: string; developmentId?: string; impact: number; critical: boolean; x?: number }, backlog?: boolean): void;
+  enqueue(
+    req: { eventId: string; developmentId?: string; impact: number; critical: boolean; x?: number; newsAt?: number; fadeAt?: number },
+    backlog?: boolean,
+  ): void;
   updateImpact(eventId: string, impact: number, critical: boolean): void;
   forgetEvent(eventId: string): void;
 }
@@ -66,8 +69,8 @@ export class SandStore {
     const sorted = [...this.events.values()].sort((a, b) => Date.parse(a.firstSeenAt) - Date.parse(b.firstSeenAt));
     for (const e of sorted) {
       const r = this.impacts.get(e.id) ?? this.score(e);
-      sink.enqueue({ eventId: e.id, impact: r.score, critical: isCritical(r) }, true);
-      for (const d of e.developments) sink.enqueue({ eventId: e.id, developmentId: d.id, impact: r.score, critical: false }, true);
+      sink.enqueue({ eventId: e.id, impact: r.score, critical: isCritical(r), ...timing(e) }, true);
+      for (const d of e.developments) sink.enqueue({ eventId: e.id, developmentId: d.id, impact: r.score, critical: false, ...timing(e, d.at) }, true);
     }
   }
 
@@ -113,8 +116,8 @@ export class SandStore {
       this.events.set(e.id, e);
       const r = this.score(e);
       if (!known) {
-        this.spawn({ eventId: e.id, impact: r.score, critical: isCritical(r) }, true);
-        for (const d of e.developments) this.spawn({ eventId: e.id, developmentId: d.id, impact: r.score, critical: false }, true);
+        this.spawn({ eventId: e.id, impact: r.score, critical: isCritical(r), ...timing(e) }, true);
+        for (const d of e.developments) this.spawn({ eventId: e.id, developmentId: d.id, impact: r.score, critical: false, ...timing(e, d.at) }, true);
       }
     }
     this.set({ status, snapshotLoaded: true, connection: 'open' });
@@ -127,13 +130,13 @@ export class SandStore {
     const r = this.score(e);
     const now = new Date().toISOString();
     if (!known) {
-      this.spawn({ eventId: e.id, impact: r.score, critical: isCritical(r) });
+      this.spawn({ eventId: e.id, impact: r.score, critical: isCritical(r), ...timing(e) });
       this.set({ sessionCount: this.state.sessionCount + 1, lastReceivedAt: now });
       return;
     }
     this.sink?.updateImpact(e.id, r.score, isCritical(r));
     if (msg.change === 'development' && msg.developmentId) {
-      this.spawn({ eventId: e.id, developmentId: msg.developmentId, impact: r.score, critical: false });
+      this.spawn({ eventId: e.id, developmentId: msg.developmentId, impact: r.score, critical: false, ...timing(e, e.developments.find((d) => d.id === msg.developmentId)?.at) });
       this.set({ sessionCount: this.state.sessionCount + 1, lastReceivedAt: now });
       return;
     }
@@ -153,7 +156,7 @@ export class SandStore {
       r = { ...r, score, band: band.id, bandLabel: band.label, rules: [...r.rules, `valor forçado no laboratório (motor calculou ${r.score})`] };
       this.impacts.set(e.id, r);
     }
-    this.spawn({ eventId: e.id, impact: r.score, critical: isCritical(r), x: opts.x }, true);
+    this.spawn({ eventId: e.id, impact: r.score, critical: isCritical(r), x: opts.x, ...timing(e) }, true);
     this.set({ lastReceivedAt: new Date().toISOString() });
     return r;
   }
@@ -177,6 +180,19 @@ export class SandStore {
     }
     this.set({});
   }
+}
+
+/**
+ * When the news happened/was published, and when its grain should have faded away
+ * completely (the event's expiry). Drives the age shading of each grain.
+ */
+export function timing(e: NewsEvent, at?: string): { newsAt: number; fadeAt: number } {
+  const now = Date.now();
+  let newsAt = Date.parse(at ?? e.publishedAt ?? e.firstSeenAt);
+  if (!Number.isFinite(newsAt) || newsAt > now) newsAt = Math.min(now, Date.parse(e.firstSeenAt) || now);
+  let fadeAt = Date.parse(e.expiresAt);
+  if (!Number.isFinite(fadeAt) || fadeAt <= newsAt) fadeAt = newsAt + 48 * 3_600_000;
+  return { newsAt, fadeAt };
 }
 
 export function isCritical(r: ImpactResult): boolean {

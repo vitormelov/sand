@@ -20,6 +20,21 @@ export interface SpawnRequest {
   critical: boolean;
   /** Drop position as a fraction of the width (lab/testing); random when omitted. */
   x?: number;
+  /** Wall-clock ms of the news and of its complete fade-out (age shading). */
+  newsAt?: number;
+  fadeAt?: number;
+}
+
+/** Opacity levels used for age shading (quantized so the sediment is re-baked rarely). */
+export const TONE_LEVELS = 24;
+const TONE_REFRESH_S = 15;
+
+/** 1 = just published (solid ink), 0 = reached the end of its life (gone). */
+export function toneFor(newsAt: number | undefined, fadeAt: number | undefined, now = Date.now()): number {
+  if (newsAt == null || fadeAt == null || fadeAt <= newsAt) return 1;
+  const life = Math.min(1, Math.max(0, (now - newsAt) / (fadeAt - newsAt)));
+  // Ease: stays dark for a while, then lightens steadily and vanishes at the end.
+  return Math.pow(1 - life, 0.8);
 }
 
 export interface SimStats {
@@ -62,6 +77,7 @@ export class SandSimulation {
   private running = false;
   private pruneTimer = 5;
   private paused = false;
+  private toneTimer = 0;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -187,13 +203,10 @@ export class SandSimulation {
     this.critical = this.critical.filter((p) => p.critical);
   }
 
-  /** Event expired: its grains stay as anonymous sand (continuity), no longer clickable. */
+  /** Event expired: its grains (already faded by age) leave the sand. */
   forgetEvent(eventId: string): void {
     const list = this.byEvent.get(eventId);
-    if (list) for (const p of list) {
-      p.eventId = '';
-      p.critical = false;
-    }
+    if (list) for (const p of list) this.engine.release(p);
     this.byEvent.delete(eventId);
     this.critical = this.critical.filter((p) => p.eventId);
   }
@@ -265,14 +278,39 @@ export class SandSimulation {
       impact: req.impact,
       critical: req.critical && !req.developmentId,
       bornAt: this.engine.time,
+      newsAt: req.newsAt,
+      fadeAt: req.fadeAt,
       vx: req.x != null ? 0 : (Math.random() - 0.5) * 10,
       vy: 20 + Math.random() * 20,
     });
+    p.tone = toneFor(p.newsAt, p.fadeAt);
     if (!this.byEvent.has(p.eventId)) this.byEvent.set(p.eventId, []);
     this.byEvent.get(p.eventId)!.push(p);
     if (p.critical) this.critical.push(p);
     if (this.settings.reducedMotion) this.engine.dropInstant(p);
     else this.engine.add(p);
+  }
+
+  /**
+   * Age shading: news lightens as it gets older and disappears at the end of its
+   * life. Fully faded grains leave the simulation; what rested on them slides down.
+   */
+  refreshTones(now = Date.now()): void {
+    this.toneTimer = TONE_REFRESH_S;
+    let changed = false;
+    for (const [id, list] of this.byEvent) {
+      for (const p of list) {
+        const t = toneFor(p.newsAt, p.fadeAt, now);
+        if (Math.round(t * TONE_LEVELS) !== Math.round(p.tone * TONE_LEVELS)) changed = true;
+        p.tone = t;
+        if (t <= 0.5 / TONE_LEVELS) this.engine.release(p);
+      }
+      const alive = list.filter((p) => p.state !== 'removed');
+      if (alive.length) this.byEvent.set(id, alive);
+      else this.byEvent.delete(id);
+    }
+    this.critical = this.critical.filter((p) => p.state !== 'removed');
+    if (changed) this.engine.dirty = true;
   }
 
   /** Drop references to grains that sank out of the world, so memory stays flat. */
@@ -320,6 +358,8 @@ export class SandSimulation {
     if (!this.paused) this.engine.step(simDt);
     this.pruneTimer -= dt;
     if (this.pruneTimer <= 0) this.prune();
+    this.toneTimer -= dt;
+    if (this.toneTimer <= 0) this.refreshTones();
     this.renderer.render(this.engine, {
       time: this.engine.time,
       dt,
