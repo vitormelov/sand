@@ -1087,8 +1087,36 @@ button {
   background: var(--veil);
   backdrop-filter: blur(2px);
 }
+.auth {
+  /* The sand falls behind the login: no veil over the whole page, only under the form. */
+  background: none;
+  backdrop-filter: none;
+}
+.auth-backdrop {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
 .auth__inner {
+  position: relative;
   width: min(380px, 100%);
+  padding: 28px 28px 20px;
+  border-radius: 16px;
+  background: var(--veil);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.auth__brand {
+  margin: 0 0 22px;
+  /* Letter-spacing also trails the last letter: pull it back so the word is truly centred. */
+  margin-right: -0.32em;
+  text-align: center;
+  font-size: clamp(44px, 12vw, 72px);
+  font-weight: 600;
+  letter-spacing: 0.32em;
+  line-height: 1;
+  color: var(--ink);
+  user-select: none;
 }
 .questionnaire__inner {
   width: min(560px, 100%);

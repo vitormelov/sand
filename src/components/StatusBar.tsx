@@ -4,12 +4,17 @@ import { formatClock } from '../utils/format';
 
 const STALE_MS = 60 * 60_000;
 
-export function connectionText(ui: UiState): { label: string; tone: 'ok' | 'warn' | 'off' } {
+/**
+ * Connection line. The source count is "switched on / available": sources this user turned
+ * off in the settings count as off; sources the server cannot use are not counted at all.
+ */
+export function connectionText(ui: UiState, hidden: ReadonlySet<string> = new Set()): { label: string; tone: 'ok' | 'warn' | 'off' } {
   if (ui.demo) return { label: 'modo demonstração', tone: 'warn' };
   if (ui.connection === 'offline') return { label: 'sem internet', tone: 'off' };
   if (ui.connection === 'reconnecting') return { label: 'reconectando', tone: 'warn' };
   if (ui.connection === 'connecting' || !ui.snapshotLoaded) return { label: 'conectando', tone: 'warn' };
-  const all = ui.status?.sources.filter((s) => s.health !== 'disabled') ?? [];
+  const available = ui.status?.sources.filter((s) => s.health !== 'disabled') ?? [];
+  const all = available.filter((s) => !hidden.has(s.id));
   // Sources still on their first poll are neither healthy nor failing yet.
   const srcs = all.filter((s) => s.health !== 'pending');
   if (all.length && srcs.length === 0) return { label: 'iniciando fontes', tone: 'warn' };
@@ -17,11 +22,11 @@ export function connectionText(ui: UiState): { label: string; tone: 'ok' | 'warn
   const lastSuccess = Math.max(0, ...srcs.map((s) => (s.lastSuccessAt ? Date.parse(s.lastSuccessAt) : 0)));
   if (srcs.length && ok === 0 && srcs.every((s) => s.health !== 'pending')) return { label: 'fontes indisponíveis', tone: 'off' };
   if (lastSuccess && Date.now() - lastSuccess > STALE_MS) return { label: 'dados desatualizados', tone: 'warn' };
-  return { label: srcs.length ? `${ok}/${srcs.length} fontes` : 'conectado', tone: 'ok' };
+  return { label: available.length ? `${all.length}/${available.length} fontes` : 'conectado', tone: 'ok' };
 }
 
-export function StatusBar({ ui, prefs, store }: { ui: UiState; prefs: Prefs; store: SandStore }) {
-  const conn = connectionText(ui);
+export function StatusBar({ ui, prefs, store, hiddenSources }: { ui: UiState; prefs: Prefs; store: SandStore; hiddenSources?: string[] }) {
+  const conn = connectionText(ui, new Set(hiddenSources));
   const total = store.events.size;
   return (
     <footer className="statusbar" aria-live="polite">

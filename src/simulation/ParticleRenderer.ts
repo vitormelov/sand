@@ -5,8 +5,8 @@ export type RenderTheme = 'light' | 'dark';
 
 /** Canvas colours per theme (the canvas can't read CSS variables). */
 const PALETTES = {
-  light: { ink: '#111111', rgb: '17,17,17', seen: 'rgba(255,255,255,0.92)' },
-  dark: { ink: '#e9e9e6', rgb: '233,233,230', seen: 'rgba(15,15,16,0.9)' },
+  light: { ink: '#111111', rgb: '17,17,17', paper: '#ffffff' },
+  dark: { ink: '#e9e9e6', rgb: '233,233,230', paper: '#0f0f10' },
 } as const;
 let pal: (typeof PALETTES)[RenderTheme] = PALETTES.light;
 const TAU = Math.PI * 2;
@@ -18,13 +18,27 @@ const FRESH_MS = 60 * 60_000;
 /** Same rhythm as the red map marker. */
 const FRESH_PULSE_MS = 1600;
 
-/** "Already opened": a small light dot at the centre of the grain. */
-function seenDot(c: CanvasRenderingContext2D, p: Particle): void {
-  c.fillStyle = pal.seen;
+/**
+ * "Already opened": a small dot at the centre of the grain, always in contrast with it.
+ * A grain still strong in colour gets a dot in the background colour; one that has faded
+ * with age (and looks almost like the background) gets a dot in the ink colour instead.
+ * `fade` is the grain's own fade-in, so the dot appears together with it.
+ */
+export function seenDotStyle(tone: number): { ink: boolean; alpha: number } {
+  const a = level(tone) / LEVELS; // the grain's opacity
+  return a >= 0.5 ? { ink: false, alpha: 0.92 } : { ink: true, alpha: Math.min(1, a + 0.5) };
+}
+
+function seenDot(c: CanvasRenderingContext2D, p: Particle, fade = 1): void {
+  const prev = c.globalAlpha;
+  const style = seenDotStyle(p.tone);
+  c.fillStyle = style.ink ? pal.ink : pal.paper;
+  c.globalAlpha = style.alpha * fade;
   c.beginPath();
   c.arc(p.x, p.y, Math.max(1.2, p.r * 0.26), 0, TAU);
   c.fill();
   c.fillStyle = pal.ink;
+  c.globalAlpha = prev;
 }
 
 /**
@@ -157,7 +171,7 @@ export class ParticleRenderer {
       c.beginPath();
       c.arc(p.x, p.y, p.r, 0, TAU);
       c.fill();
-      if (p.viewed) seenDot(c, p);
+      if (p.viewed) seenDot(c, p, p.alpha);
     }
     c.globalAlpha = 1;
 
@@ -169,7 +183,7 @@ export class ParticleRenderer {
       c.beginPath();
       c.arc(p.x, p.y, p.r, 0, TAU);
       c.fill();
-      if (p.viewed) seenDot(c, p);
+      if (p.viewed) seenDot(c, p, p.alpha);
     }
     c.globalAlpha = 1;
 

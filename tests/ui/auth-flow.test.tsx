@@ -40,6 +40,11 @@ describe('login and first-login questionnaire', () => {
     render(<Root />);
     expect(await screen.findByRole('heading', { name: 'Entrar' })).toBeInTheDocument();
     expect(FakeEventSource.instances).toHaveLength(0); // no news before login
+    // Behind the form: decorative sand only (hidden from screen readers, carries no news).
+    const backdrop = document.querySelector('.auth-backdrop')!;
+    expect(backdrop.getAttribute('aria-hidden')).toBe('true');
+    expect(backdrop.querySelector('canvas.sand-canvas')).not.toBeNull();
+    expect(screen.getByText('SAND')).toHaveClass('auth__brand');
     await userEvent.type(screen.getByLabelText('E-mail'), 'eu@example.com');
     await userEvent.type(screen.getByLabelText(/^Senha/), 'errada-123');
     await userEvent.click(screen.getByRole('button', { name: 'Entrar' }));

@@ -367,7 +367,7 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
 
       {prefs.showIndicators && (
         <div className="chrome">
-          <StatusBar ui={ui} prefs={{ ...prefs, location: profile.location }} store={store} />
+          <StatusBar ui={ui} prefs={{ ...prefs, location: profile.location }} store={store} hiddenSources={profile.hiddenSources} />
         </div>
       )}
 

@@ -201,6 +201,18 @@ describe('connection status text', () => {
     expect(connectionText({ ...base, connection: 'open', status: { serverTime: '', eventCount: 1, sources: [{ id: 'a', name: 'A', kind: 'outlet', health: 'ok', lastSuccessAt: old }] } }).label).toBe('dados desatualizados');
     expect(connectionText({ ...base, connection: 'open', status: { serverTime: '', eventCount: 1, sources: [{ id: 'a', name: 'A', kind: 'outlet', health: 'down' }] } }).label).toBe('fontes indisponíveis');
   });
+
+  it('counts sources as switched on / available (server-disabled ones are not counted)', () => {
+    const now = new Date().toISOString();
+    const sources = [
+      ...['a', 'b', 'c', 'd', 'e'].map((id) => ({ id, name: id, kind: 'outlet' as const, health: 'ok' as const, lastSuccessAt: now })),
+      { id: 'newsapi', name: 'NewsAPI', kind: 'aggregator' as const, health: 'disabled' as const },
+    ];
+    const ui = { ...base, connection: 'open' as const, status: { serverTime: now, eventCount: 1, sources } };
+    expect(connectionText(ui).label).toBe('5/5 fontes');
+    expect(connectionText(ui, new Set(['a', 'b', 'c'])).label).toBe('2/5 fontes');
+    expect(connectionText(ui, new Set(['a', 'b', 'c', 'd', 'e'])).label).toBe('0/5 fontes');
+  });
 });
 
 void waitFor;

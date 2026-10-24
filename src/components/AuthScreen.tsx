@@ -29,7 +29,7 @@ export function AuthScreen({ onAuthed }: Props) {
   return (
     <div className="auth">
       <form className="auth__inner" onSubmit={submit} noValidate>
-        <p className="onboarding__brand">SAND</p>
+        <p className="auth__brand">SAND</p>
         <h1 className="onboarding__title">{mode === 'login' ? 'Entrar' : 'Criar conta'}</h1>
         <p className="onboarding__text">Notícias reais caem como areia. O tamanho de cada grão estima o impacto do acontecimento na sua vida.</p>
         <label className="field">
