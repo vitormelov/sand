@@ -5,13 +5,15 @@ import type { NewsEvent } from '../../shared/types';
 import type { NormalizedArticle } from '../types';
 import type { ConnectorState } from '../sources/types';
 
+export type ArticleRow = [id: string, eventId: string, sourceId: string, revision: string | null, fetchedAt: string];
+
 // node:sqlite is built into Node ≥ 22.13 — no native compilation needed.
 const require = createRequire(import.meta.url);
 type DB = import('node:sqlite').DatabaseSync;
 
 /**
- * SQLite persistence: articles (dedup), consolidated events, connector state
- * and anonymous feedback counts. Nothing about users is stored here.
+ * SQLite persistence: articles (dedup), consolidated events and connector state.
+ * The ingestion job runs it in memory, restored from Firestore on every pass.
  */
 export class Store {
   private db: DB;
@@ -45,131 +47,7 @@ export class Store {
       CREATE INDEX IF NOT EXISTS events_seq ON events(seq);
       CREATE INDEX IF NOT EXISTS events_expires ON events(expires_at);
       CREATE TABLE IF NOT EXISTS source_state (id TEXT PRIMARY KEY, data TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
-        email TEXT NOT NULL UNIQUE,
-        password_hash TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS sessions (
-        token_digest TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        expires_at TEXT NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id);
-      CREATE TABLE IF NOT EXISTS user_items (
-        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        kind TEXT NOT NULL,
-        item_id TEXT NOT NULL,
-        data TEXT,
-        created_at TEXT NOT NULL,
-        PRIMARY KEY (user_id, kind, item_id)
-      );
-      CREATE TABLE IF NOT EXISTS profiles (
-        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-        data TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-      CREATE TABLE IF NOT EXISTS feedback (
-        event_id TEXT NOT NULL,
-        value TEXT NOT NULL,
-        count INTEGER NOT NULL DEFAULT 0,
-        PRIMARY KEY (event_id, value)
-      );
     `);
-  }
-
-  // ------------------------------------------------------------- accounts
-
-  createUser(id: string, email: string, passwordHash: string, nowIso: string): boolean {
-    try {
-      this.db.prepare(`INSERT INTO users(id, email, password_hash, created_at) VALUES(?,?,?,?)`).run(id, email, passwordHash, nowIso);
-      return true;
-    } catch {
-      return false; // email already registered
-    }
-  }
-
-  userByEmail(email: string): { id: string; email: string; passwordHash: string } | undefined {
-    const r = this.db.prepare(`SELECT id, email, password_hash FROM users WHERE email = ?`).get(email) as { id: string; email: string; password_hash: string } | undefined;
-    return r ? { id: r.id, email: r.email, passwordHash: r.password_hash } : undefined;
-  }
-
-  userById(id: string): { id: string; email: string; passwordHash: string } | undefined {
-    const r = this.db.prepare(`SELECT id, email, password_hash FROM users WHERE id = ?`).get(id) as { id: string; email: string; password_hash: string } | undefined;
-    return r ? { id: r.id, email: r.email, passwordHash: r.password_hash } : undefined;
-  }
-
-  setPasswordHash(userId: string, hash: string): void {
-    this.db.prepare(`UPDATE users SET password_hash = ? WHERE id = ?`).run(hash, userId);
-  }
-
-  /** Deletes the account and everything attached to it (sessions, answers). */
-  deleteUser(userId: string): void {
-    this.db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(userId);
-    this.db.prepare(`DELETE FROM profiles WHERE user_id = ?`).run(userId);
-    this.db.prepare(`DELETE FROM user_items WHERE user_id = ?`).run(userId);
-    this.db.prepare(`DELETE FROM users WHERE id = ?`).run(userId);
-  }
-
-  createSession(digest: string, userId: string, expiresIso: string): void {
-    this.db.prepare(`INSERT INTO sessions(token_digest, user_id, expires_at) VALUES(?,?,?)`).run(digest, userId, expiresIso);
-  }
-
-  sessionUser(digest: string, nowIso: string): string | undefined {
-    const r = this.db.prepare(`SELECT user_id FROM sessions WHERE token_digest = ? AND expires_at > ?`).get(digest, nowIso) as { user_id: string } | undefined;
-    return r?.user_id;
-  }
-
-  deleteSession(digest: string): void {
-    this.db.prepare(`DELETE FROM sessions WHERE token_digest = ?`).run(digest);
-  }
-
-  deleteSessionsOf(userId: string, exceptDigest?: string): void {
-    this.db.prepare(`DELETE FROM sessions WHERE user_id = ? AND token_digest != ?`).run(userId, exceptDigest ?? '');
-  }
-
-  purgeSessions(nowIso: string): void {
-    this.db.prepare(`DELETE FROM sessions WHERE expires_at <= ?`).run(nowIso);
-  }
-
-  getProfile(userId: string): unknown {
-    const r = this.db.prepare(`SELECT data FROM profiles WHERE user_id = ?`).get(userId) as { data: string } | undefined;
-    return r ? JSON.parse(r.data) : undefined;
-  }
-
-  setProfile(userId: string, data: unknown, nowIso: string): void {
-    this.db
-      .prepare(`INSERT INTO profiles(user_id, data, updated_at) VALUES(?,?,?) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`)
-      .run(userId, JSON.stringify(data), nowIso);
-  }
-
-  // --------------------------------------------------- seen / saved news
-
-  addItem(userId: string, kind: 'viewed' | 'saved', itemId: string, data: unknown, nowIso: string): void {
-    this.db
-      .prepare(`INSERT INTO user_items(user_id, kind, item_id, data, created_at) VALUES(?,?,?,?,?) ON CONFLICT(user_id, kind, item_id) DO UPDATE SET data = excluded.data`)
-      .run(userId, kind, itemId, data == null ? null : JSON.stringify(data), nowIso);
-  }
-
-  removeItem(userId: string, kind: 'viewed' | 'saved', itemId: string): void {
-    this.db.prepare(`DELETE FROM user_items WHERE user_id = ? AND kind = ? AND item_id = ?`).run(userId, kind, itemId);
-  }
-
-  items(userId: string, kind: 'viewed' | 'saved', limit: number): { id: string; data: unknown; createdAt: string }[] {
-    const rows = this.db
-      .prepare(`SELECT item_id, data, created_at FROM user_items WHERE user_id = ? AND kind = ? ORDER BY created_at DESC LIMIT ?`)
-      .all(userId, kind, limit) as { item_id: string; data: string | null; created_at: string }[];
-    return rows.map((r) => ({ id: r.item_id, data: r.data ? JSON.parse(r.data) : null, createdAt: r.created_at }));
-  }
-
-  countItems(userId: string, kind: 'viewed' | 'saved'): number {
-    return (this.db.prepare(`SELECT COUNT(*) AS n FROM user_items WHERE user_id = ? AND kind = ?`).get(userId, kind) as { n: number }).n;
-  }
-
-  /** "Seen" marks only matter while the news is in the sand. */
-  purgeViewed(beforeIso: string): void {
-    this.db.prepare(`DELETE FROM user_items WHERE kind = 'viewed' AND created_at < ?`).run(beforeIso);
   }
 
   close(): void {
@@ -186,6 +64,32 @@ export class Store {
   currentSeq(): number {
     const row = this.db.prepare(`SELECT value FROM meta WHERE key = 'seq'`).get() as { value: string } | undefined;
     return row ? Number(row.value) : 0;
+  }
+
+  /** Restore the stream sequence saved by a previous run-once pass. */
+  setSeq(seq: number): void {
+    this.db.prepare(`INSERT INTO meta(key, value) VALUES('seq', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(String(seq));
+  }
+
+  /** Article fingerprints (dedup index) as compact rows: [id, eventId, sourceId, revision, fetchedAt]. */
+  exportArticles(): ArticleRow[] {
+    const rows = this.db.prepare(`SELECT id, event_id, source_id, revision, fetched_at FROM articles ORDER BY fetched_at`).all() as {
+      id: string;
+      event_id: string;
+      source_id: string;
+      revision: string | null;
+      fetched_at: string;
+    }[];
+    return rows.map((r) => [r.id, r.event_id, r.source_id, r.revision, r.fetched_at]);
+  }
+
+  importArticles(rows: ArticleRow[]): void {
+    // The canonical URL and title are not kept between passes: the id is derived from the URL,
+    // so it stands in for it (the column only needs to be unique).
+    const ins = this.db.prepare(
+      `INSERT INTO articles(id, canonical_url, event_id, source_id, revision, fetched_at, title) VALUES(?,?,?,?,?,?,'') ON CONFLICT(id) DO NOTHING`,
+    );
+    for (const [id, eventId, sourceId, revision, fetchedAt] of rows) ins.run(id, `id:${id}`, eventId, sourceId, revision, fetchedAt);
   }
 
   getArticle(id: string): { eventId: string; revision: string | null } | undefined {
@@ -241,10 +145,6 @@ export class Store {
     const ids = (this.db.prepare(`SELECT id FROM events WHERE expires_at <= ?`).all(nowIso) as { id: string }[]).map((r) => r.id);
     this.db.prepare(`DELETE FROM events WHERE expires_at <= ?`).run(nowIso);
     this.db.prepare(`DELETE FROM articles WHERE fetched_at < ?`).run(articleCutoffIso);
-    if (ids.length) {
-      const del = this.db.prepare(`DELETE FROM feedback WHERE event_id = ?`);
-      for (const id of ids) del.run(id);
-    }
     return ids;
   }
 
@@ -259,14 +159,4 @@ export class Store {
       .run(id, JSON.stringify(state));
   }
 
-  addFeedback(eventId: string, value: 'relevant' | 'not_relevant'): void {
-    this.db
-      .prepare(`INSERT INTO feedback(event_id, value, count) VALUES(?, ?, 1) ON CONFLICT(event_id, value) DO UPDATE SET count = count + 1`)
-      .run(eventId, value);
-  }
-
-  feedbackCounts(eventId: string): Record<string, number> {
-    const rows = this.db.prepare(`SELECT value, count FROM feedback WHERE event_id = ?`).all(eventId) as { value: string; count: number }[];
-    return Object.fromEntries(rows.map((r) => [r.value, r.count]));
-  }
 }

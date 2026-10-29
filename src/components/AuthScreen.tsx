@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ApiError, ERROR_TEXT, login, register, type Me } from '../services/account';
+import { ApiError, ERROR_TEXT, login, register, resetPassword, type Me } from '../services/account';
 
 interface Props {
   onAuthed: (me: Me) => void;
@@ -11,10 +11,27 @@ export function AuthScreen({ onAuthed }: Props) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const forgot = async () => {
+    setError(null);
+    setNotice(null);
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return setError('Digite seu e-mail acima para receber o link.');
+    setBusy(true);
+    try {
+      await resetPassword(email);
+      setNotice('Se houver uma conta com este e-mail, enviamos um link para criar uma nova senha.');
+    } catch (err) {
+      setError(err instanceof ApiError ? (ERROR_TEXT[err.code] ?? 'Não foi possível enviar agora.') : 'Sem conexão com o servidor.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setNotice(null);
     if (mode === 'register' && password.length < 8) return setError(ERROR_TEXT.weak_password);
     setBusy(true);
     try {
@@ -53,6 +70,11 @@ export function AuthScreen({ onAuthed }: Props) {
             {error}
           </p>
         )}
+        {notice && (
+          <p className="hint" role="status">
+            {notice}
+          </p>
+        )}
         <button className="btn auth__submit" type="submit" disabled={busy}>
           {busy ? 'Aguarde…' : mode === 'login' ? 'Entrar' : 'Criar conta'}
         </button>
@@ -69,6 +91,13 @@ export function AuthScreen({ onAuthed }: Props) {
             {mode === 'login' ? 'Criar conta' : 'Entrar'}
           </button>
         </p>
+        {mode === 'login' && (
+          <p className="hint">
+            <button type="button" className="link-btn link-btn--inline" onClick={() => void forgot()} disabled={busy}>
+              Esqueci a senha
+            </button>
+          </p>
+        )}
       </form>
     </div>
   );

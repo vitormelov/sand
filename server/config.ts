@@ -106,21 +106,8 @@ function parseFeedsEnv(): RssFeedConfig[] | undefined {
   }
 }
 
-const production = process.env.NODE_ENV === 'production';
-
 export const config = {
-  // In production PORT is the platform's convention. In development the API has its own
-  // variable, so a PORT meant for the web dev server never collides with it.
-  port: production ? num('PORT', 8787) : num('SAND_API_PORT', 8787),
-  host: process.env.HOST ?? '0.0.0.0',
-  production,
-  databasePath: process.env.DATABASE_PATH ?? 'data/sand.db',
   retentionHours: num('RETENTION_HOURS', 48),
-  snapshotLimit: num('SNAPSHOT_LIMIT', 400),
-  ingestion: bool('INGESTION_ENABLED', true),
-  maxSseClients: num('MAX_SSE_CLIENTS', 500),
-  maxSsePerIp: num('MAX_SSE_PER_IP', 6),
-  corsOrigin: process.env.CORS_ORIGIN,
   llm: {
     // Off unless explicitly enabled: a key that merely exists in the host environment
     // never turns AI on (and never spends tokens) by accident.

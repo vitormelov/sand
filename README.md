@@ -8,30 +8,25 @@ Fundo branco (ou escuro: tema claro, escuro ou automático pelo sistema, em Conf
 
 ## Rodar localmente
 
-Requisitos: **Node.js ≥ 22.13** (usa o SQLite embutido `node:sqlite`; testado no Node 24.11, Windows 11).
+Requisitos: **Node.js ≥ 22.13** (a coleta usa o SQLite embutido `node:sqlite` em memória; testado no Node 24) e um **projeto Firebase** (veja [Deploy](#deploy)).
 
 ```bash
 npm install
 ```
 
+Crie um `.env` a partir de [`.env.example`](.env.example) com a configuração web do Firebase (`VITE_FIREBASE_*`) e, para coletar notícias, o JSON da conta de serviço (`FIREBASE_SERVICE_ACCOUNT`).
+
 ```bash
 npm run dev
 ```
 
-- Interface: http://localhost:5173 (Vite; usa `PORT` se definido)
-- API: http://localhost:8787 (`SAND_API_PORT`)
-
-O site exige **login com e-mail e senha**. No primeiro acesso, um questionário curto refina as estimativas: cidade (GPS ou digitada — obrigatória), importância de cada categoria, futebol e time, rotina (transporte, aluguel, filhos em idade escolar), trabalho e finanças, até 3 outros lugares importantes e temas que prefere ver menos. Tudo pode ser refeito em Configurações. O laboratório (`/?lab`) e o DEMO (`/?demo`) não exigem login, pois usam só dados fictícios. As notícias começam a chegar em poucos segundos; as fontes são consultadas no servidor em intervalos de 5–15 minutos.
-
-Produção (API + interface no mesmo processo, http://localhost:8787):
+Interface em http://localhost:5173. Ela lê as notícias do Firestore em tempo real e usa o Firebase Auth para login; a busca de cidade (`/api/geocode`) roda dentro do próprio Vite. Para colocar notícias no Firestore a partir do seu computador:
 
 ```bash
-npm run build
+npm run ingest
 ```
 
-```bash
-npm start
-```
+O site exige **login com e-mail e senha** (com "Esqueci a senha" por e-mail). No primeiro acesso, um questionário curto refina as estimativas: cidade (GPS ou digitada — obrigatória), importância de cada categoria, futebol e time, rotina (transporte, aluguel, filhos em idade escolar), trabalho e finanças, até 3 outros lugares importantes e temas que prefere ver menos. Tudo pode ser refeito em Configurações. O laboratório (`/?lab`) e o DEMO (`/?demo`) não exigem login nem Firebase, pois usam só dados fictícios.
 
 Laboratório do desenvolvedor, com dados **fictícios** e o rótulo "LAB" sempre visível, sem conexão com as fontes reais: http://localhost:5173/?lab. Ele tem uma régua de tamanhos (0–100), grãos com impacto escolhido, cenários calculados pelo motor real com o seu perfil (de "notícia leve" a "emergência na sua cidade"), rajada/chuva contínua, pausar física, limpar areia e métricas (fps, grãos caindo/depositados, fila).
 
@@ -41,10 +36,12 @@ Modo demonstração, com dados **fictícios** e o rótulo "DEMO — dados fictí
 
 | Comando | O que faz |
 |---|---|
-| `npm run dev` | API (tsx watch) + interface (Vite) |
+| `npm run dev` | interface (Vite) + `/api/geocode` local |
 | `npm run dev:lan` | igual, mas acessível por outros aparelhos da rede (ex.: celular em `http://<IP-do-PC>:5173`) |
+| `npm run ingest` | uma passada de coleta: lê o estado do Firestore, consulta as fontes vencidas, grava de volta (é o que o GitHub Actions roda a cada ~5 min) |
 | `npm run build` | typecheck + bundle de produção em `dist/` |
-| `npm start` | servidor de produção (serve `dist/` + API) |
+| `npm run build:vercel` | build da Vercel (`.vercel/output`: site estático + função de busca de cidade) |
+| `npm run deploy:rules` | publica `firestore.rules` no projeto Firebase |
 | `npm test` | todos os testes (unitários, integração, interface) |
 | `npm run typecheck` | TypeScript sem emitir arquivos |
 | `npm run verify:sources` | consulta **as fontes reais** uma vez e mostra itens, locais e scores para um perfil de Fortaleza (`-- usgs g1` para filtrar) |
@@ -52,14 +49,14 @@ Modo demonstração, com dados **fictícios** e o rótulo "DEMO — dados fictí
 
 ## Configuração
 
-Tudo é opcional; veja [`.env.example`](.env.example). Copie para `.env` (carregado automaticamente) ou defina no ambiente de hospedagem.
+Veja [`.env.example`](.env.example). Copie para `.env` (carregado automaticamente) ou defina no ambiente de hospedagem (Vercel, secrets do GitHub). Só as variáveis do Firebase são obrigatórias.
 
 - `NEWSAPI_KEY` — ativa a NewsAPI (opcional).
 - **IA desligada por padrão**: o SAND funciona só com regras e não gasta tokens. Para ativar a classificação complementar por IA em itens ambíguos é preciso definir **as duas** variáveis, `LLM_ENABLED=true` e `ANTHROPIC_API_KEY` (modelo em `LLM_MODEL`, padrão `claude-opus-5-5`; limite em `LLM_MAX_CALLS_PER_HOUR`). Uma chave existente no ambiente, sozinha, não ativa nada. O custo depende do volume de notícias, não do número de usuários. Só título e resumo da notícia são enviados; nunca dados do usuário.
 - `RSS_FEEDS_JSON`, `DISABLED_SOURCES`, `ENABLE_INTERNATIONAL`, `GDELT_ENABLED`, `GDELT_QUERIES` — ajustar fontes (veja [docs/SOURCES.md](docs/SOURCES.md)).
 - `RETENTION_HOURS` (48) — por quanto tempo eventos ficam guardados e visíveis.
 
-Sem nenhuma chave, o SAND funciona com fontes públicas e classificação por regras.
+Sem nenhuma chave de fonte ou de IA, o SAND funciona com fontes públicas e classificação por regras.
 
 ## Fontes
 
@@ -84,23 +81,26 @@ O SAND guarda e mostra apenas título, um resumo curto e o link para a matéria 
 - [docs/IMPACT_ENGINE.md](docs/IMPACT_ENGINE.md) — fatores, pesos, regras especiais, relações causais, exemplos medidos.
 - [docs/PERFORMANCE.md](docs/PERFORMANCE.md) — física, limites de memória e medições.
 
-Resumo: o servidor coleta, normaliza, deduplica, agrupa e analisa cada notícia **sem saber quem vai vê-la** (categorias, canais de consequência, local, severidade, até onde os efeitos se espalham). O navegador recebe os eventos por SSE e calcula o impacto com o perfil local (cidade + interesses opcionais). Impacto e confiança são dimensões separadas.
+Resumo: a coleta (GitHub Actions, a cada ~5 min) normaliza, deduplica, agrupa e analisa cada notícia **sem saber quem vai vê-la** (categorias, canais de consequência, local, severidade, até onde os efeitos se espalham) e grava no Firestore, agrupada por hora (`feed/h-AAAAMMDDHH`). O navegador escuta essa coleção em tempo real e calcula o impacto com o perfil local (cidade + interesses opcionais). Impacto e confiança são dimensões separadas.
+
+```
+GitHub Actions (cron */5) ──► fontes ──► pipeline ──► Firestore ◄── navegador (Firebase SDK, tempo real)
+                                                                    ▲
+Vercel: site estático + /api/geocode, /api/geocode/reverse ─────────┘ (login pelo Firebase Auth)
+```
 
 ## Contas e privacidade
 
-- Senhas guardadas apenas como hash scrypt com sal; sessão em cookie `HttpOnly`, `SameSite=Lax` (e `Secure` em produção), válida por 30 dias.
-- Login limitado por IP e por e-mail; resposta idêntica para e-mail inexistente e senha errada.
-- Requisições que alteram dados exigem o cabeçalho `X-Sand: 1` (proteção CSRF).
-- Notícias, stream e geocodificação exigem sessão; `/api/health` é público.
-- Excluir a conta (Configurações → Conta) apaga e-mail, sessões e respostas imediatamente.
-- Ainda **não há recuperação de senha** (precisa de um serviço de envio de e-mail).
-
+- Login pelo **Firebase Auth** (e-mail e senha; o Google guarda só o hash da senha). Recuperação de senha por e-mail ("Esqueci a senha").
+- Os dados da conta ficam no Firestore em `users/{uid}` (perfil, notícias salvas, ids de notícias vistas). As regras em [`firestore.rules`](firestore.rules) deixam cada pessoa ler e escrever **só os próprios documentos**; notícias exigem login; o estado da coleta (`ingest/*`) não é acessível pelo navegador.
+- Trocar a senha e excluir a conta pedem a senha atual de novo. Excluir a conta (Configurações → Conta) apaga perfil, salvas, vistas e o login imediatamente.
+- A busca de cidade (`/api/geocode`) só atende quem está logado (o token do Firebase é verificado com as chaves públicas do Google).
 
 - As respostas do questionário ficam na conta do usuário; o **cálculo de impacto continua acontecendo no navegador** — o servidor envia as mesmas notícias para todos.
-- GPS é opcional: a posição é arredondada para 0,1° (~11 km) no navegador antes de ser enviada; o servidor arredonda de novo e descobre a cidade via OpenStreetMap Nominatim (com cache e no máximo 1 consulta/s, conforme a política de uso). Guarda-se só a cidade e o centro aproximado.
-- A busca de cidade passa pelo servidor do SAND, que consulta o Open-Meteo Geocoding (gratuito, sem chave, para uso não comercial; com fallback offline para cidades brasileiras).
-- Feedback "relevante / não relevante" fica no navegador; o servidor recebe só a contagem anônima por notícia.
-- Sem contas, analytics, anúncios ou rastreadores. Configurações → "Limpar preferências locais" apaga tudo.
+- GPS é opcional: a posição é arredondada para 0,1° (~11 km) no navegador antes de ser enviada; a função do SAND arredonda de novo e descobre a cidade via OpenStreetMap Nominatim (com cache e no máximo 1 consulta/s, conforme a política de uso). Guarda-se só a cidade e o centro aproximado.
+- A busca de cidade passa pela função do SAND na Vercel, que consulta o Open-Meteo Geocoding (gratuito, sem chave, para uso não comercial; com fallback offline para cidades brasileiras).
+- Feedback "relevante / não relevante" fica no navegador; o Firestore recebe só a contagem anônima por notícia (`feedback/{id}`; as regras só permitem somar 1).
+- Sem analytics, anúncios ou rastreadores. Configurações → "Limpar preferências locais" apaga as preferências deste navegador.
 
 ## Testes
 
@@ -108,37 +108,28 @@ Resumo: o servidor coleta, normaliza, deduplica, agrupa e analisa cada notícia 
 npm test
 ```
 
-99 testes em 10 arquivos (todos passando na última execução):
 
 | Tipo | Arquivos | O que cobre | Dados |
 |---|---|---|---|
-| Unitários | `tests/unit/*` | score → raio, normalização, URLs canônicas, datas, gazetteer, regras de análise (incl. texto com "instruções" injetadas), motor de impacto (proximidade, eventos globais, emergência, impacto ≠ confiança, notícia leve, interesses sem bolha, metadados ausentes), deduplicação, agrupamento, desdobramentos, retenção, relações causais, física (limites, colisões, pilha, limites de partículas, impacto/avalanche, pausa, movimento reduzido, sessão longa) | sintéticos |
-| Integração | `tests/integration/*` | parsers com **respostas reais capturadas** (Agência Brasil, g1 CE, USGS, GDACS, INMET), HTTP (timeout, 304, 429/Retry-After), isolamento de falhas entre fontes, servidor real: ingestão → SQLite → SSE, retomada com `Last-Event-ID`, limite de conexões, feedback, cabeçalhos de segurança | fixtures reais + conector controlável; amostra GDELT sintética (documentada) |
-| Interface | `tests/ui/*` (jsdom) | onboarding, cidade, detalhes (abrir/fechar/Escape, link seguro, HTML não interpretado), preferências, movimento reduzido, estados de carregamento/vazio/erro/offline, DEMO rotulado | EventSource e canvas simulados |
+| Unitários | `tests/unit/*` | passada de coleta (fontes vencidas, deduplicação entre passadas, recuo em falhas, expiração), agrupamento por hora, diferença entre snapshots do Firestore, API de cidades (login obrigatório), score → raio, normalização, URLs canônicas, datas, gazetteer, regras de análise (incl. texto com "instruções" injetadas), motor de impacto (proximidade, eventos globais, emergência, impacto ≠ confiança, notícia leve, interesses sem bolha, metadados ausentes), deduplicação, agrupamento, desdobramentos, retenção, relações causais, física (limites, colisões, pilha, limites de partículas, impacto/avalanche, pausa, movimento reduzido, sessão longa) | sintéticos |
+| Integração | `tests/integration/*` | parsers com **respostas reais capturadas** (Agência Brasil, g1 CE, USGS, GDACS, INMET), HTTP (timeout, 304, 429/Retry-After), isolamento de falhas entre fontes | fixtures reais + conector controlável; amostra GDELT sintética (documentada) |
+| Interface | `tests/ui/*` (jsdom) | onboarding, cidade, detalhes (abrir/fechar/Escape, link seguro, HTML não interpretado), preferências, movimento reduzido, estados de carregamento/vazio/erro/offline, DEMO rotulado | feed, conta Firebase e canvas simulados |
 
 Verificações manuais feitas no navegador (Chromium do app, 401×682 e produção): onboarding com busca real de cidade, recálculo ao trocar de cidade, painel de detalhes, lista de recentes, modo ambiente, CSP sem erros, ~180 fps (taxa da tela) com pior quadro de 6 ms. Verificações contra fontes reais: `npm run verify:sources`.
 
 ## Deploy
 
-Um único processo Node serve a API, o SSE e a interface.
+**Vercel** (site + busca de cidade), **Firebase** (login e banco) e **GitHub Actions** (coleta a cada ~5 min). Planos gratuitos dão conta de um uso moderado.
 
-**Docker**
+1. **Firebase** ([console](https://console.firebase.google.com)): crie um projeto; em *Authentication → Sign-in method*, ative **E-mail/senha**; crie o **Firestore** (região `southamerica-east1`); em *Configurações do projeto → Seus apps*, registre um app Web e copie a configuração (`apiKey`, `authDomain`, `projectId`, `appId`); em *Contas de serviço*, gere uma **chave privada** (arquivo JSON).
+2. **Regras do Firestore**: `npx firebase login`, `npx firebase use --add` (escolha o projeto) e `npm run deploy:rules`.
+3. **GitHub** (Settings → Secrets and variables → Actions): secret `FIREBASE_SERVICE_ACCOUNT` com o conteúdo do JSON. Em *Actions → Ingest news → Run workflow* rode uma vez para preencher o Firestore; depois ele roda sozinho a cada ~5 min.
+4. **Vercel**: importe o repositório (o build usa `vercel.json` → `npm run build:vercel`) e defina `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID` e `VITE_FIREBASE_APP_ID`.
+5. **Firebase → Authentication → Settings → Authorized domains**: adicione o domínio da Vercel (ex.: `sand.vercel.app`).
 
-```bash
-docker build -t sand .
-```
-
-```bash
-docker run -p 8787:8787 -v sand-data:/app/data sand
-```
-
-**Use HTTPS em produção**: navegadores só liberam o GPS e cookies `Secure` em HTTPS (ou em `localhost`). Atrás de um proxy que já faz HTTPS, mantenha o padrão; para testar em HTTP puro, `COOKIE_SECURE=false`.
-
-**Qualquer host Node (Render, Railway, Fly.io, VPS):** build `npm ci && npm run build`, start `npm start`, volume persistente em `data/` (ou `DATABASE_PATH`). O host define `PORT`.
-
-Atrás de proxy reverso (nginx etc.), desative buffering e aumente o timeout em `/api/stream` (o servidor já envia `X-Accel-Buffering: no` e heartbeat a cada 25 s).
-
-Escala: o desenho atual assume **uma instância** (SQLite, limitador de taxa e hub SSE em memória). Para várias instâncias, trocar `Store` por PostgreSQL e distribuir eventos por pub/sub (ex.: Redis).
+Observações:
+- O GitHub pode atrasar execuções agendadas alguns minutos e **pausa agendamentos depois de 60 dias sem commits** no repositório (reative na aba Actions).
+- A configuração web do Firebase (`VITE_FIREBASE_*`) é pública por natureza; quem protege os dados são o Firebase Auth e as `firestore.rules`. Já `FIREBASE_SERVICE_ACCOUNT` é segredo: só no GitHub (e no seu `.env` local), nunca no código.
 
 ## Limitações conhecidas
 

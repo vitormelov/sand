@@ -1,8 +1,11 @@
+import { doc, increment, setDoc } from 'firebase/firestore';
 import type { UserLocation } from '../../shared/types';
+import { authHeader } from './account';
+import { db } from './firebase';
 import type { FeedbackValue } from './storage';
 
 export async function searchCities(q: string, signal?: AbortSignal): Promise<{ results: UserLocation[]; source: string }> {
-  const res = await fetch(`/api/geocode?${new URLSearchParams({ q, lang: 'pt' })}`, { signal });
+  const res = await fetch(`/api/geocode?${new URLSearchParams({ q, lang: 'pt' })}`, { signal, headers: await authHeader() });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -10,11 +13,8 @@ export async function searchCities(q: string, signal?: AbortSignal): Promise<{ r
 /** Anonymous aggregate: only the event id and the vote are sent — never the profile. */
 export async function sendFeedback(eventId: string, value: FeedbackValue): Promise<void> {
   try {
-    await fetch('/api/feedback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Sand': '1' },
-      body: JSON.stringify({ eventId, value }),
-    });
+    if (!/^ev_[a-z0-9]{1,40}$/.test(eventId)) return;
+    await setDoc(doc(db(), 'feedback', eventId), { [value]: increment(1) }, { merge: true });
   } catch {
     /* feedback is best-effort; the local preference is already saved */
   }

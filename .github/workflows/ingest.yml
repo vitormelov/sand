@@ -1,0 +1,32 @@
+# Fetches the news sources and updates Firestore (one pass per run).
+# GitHub may delay scheduled runs by a few minutes when busy, and pauses schedules
+# after 60 days without commits to the repository (re-enable in the Actions tab).
+name: Ingest news
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+# Never two passes at once: a pass reads, then rewrites, the shared state.
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run ingest
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          # Optional AI classification (off unless LLM_ENABLED=true is set as a repository variable).
+          LLM_ENABLED: ${{ vars.LLM_ENABLED || 'false' }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

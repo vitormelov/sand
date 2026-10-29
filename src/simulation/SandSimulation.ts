@@ -18,6 +18,8 @@ export interface SimSettings {
   terrain?: boolean;
   /** Show the news title in a balloon beside grains while they fall. */
   titles?: boolean;
+  /** 'organized': each grain falls at a column set by its impact, lowest on the left, highest on the right. */
+  layout?: 'natural' | 'organized';
 }
 
 export interface SpawnRequest {
@@ -151,6 +153,7 @@ export class SandSimulation {
   setSettings(next: Partial<SimSettings>): void {
     const prevScale = this.settings.sizeScale;
     const prevTheme = this.settings.theme;
+    const prevLayout = this.settings.layout ?? 'natural';
     this.settings = { ...this.settings, ...next };
     if (next.theme && next.theme !== prevTheme) {
       this.renderer.setTheme(next.theme);
@@ -159,6 +162,31 @@ export class SandSimulation {
     this.applySettings();
     if (next.sizeScale != null && next.sizeScale !== prevScale) this.rescaleAll();
     if (next.terrain !== undefined) this.updateCeiling();
+    if ((this.settings.layout ?? 'natural') !== prevLayout) this.rearrange();
+  }
+
+  private get organized(): boolean {
+    return this.settings.layout === 'organized';
+  }
+
+  /** Organized mode: impact 0 at the left edge, 100 at the right, with a little jitter so columns stay sand-like. */
+  private organizedX(impact: number, r: number): number {
+    const w = this.engine.width;
+    const t = Math.min(100, Math.max(0, impact)) / 100;
+    const jitter = (Math.random() - 0.5) * Math.min(r, w * 0.01);
+    return Math.min(w - r, Math.max(r, r + t * (w - 2 * r) + jitter));
+  }
+
+  /** Layout changed: move every grain to its new column and re-pour the sand (old news stays below). */
+  private rearrange(): void {
+    const w = this.engine.width;
+    for (const list of this.byEvent.values()) {
+      for (const p of list) {
+        p.x = this.organized ? this.organizedX(p.impact, p.r) : p.r + Math.random() * (w - 2 * p.r);
+        p.vx = 0;
+      }
+    }
+    this.engine.relayout();
   }
 
   /** The line the sand keeps under follows the map, so it is recomputed with the viewport. */
@@ -286,6 +314,14 @@ export class SandSimulation {
     this.critical = this.critical.filter((p) => p.critical);
   }
 
+  /** The time window changed: the grain keeps its place and fades out at `fadeAt` instead. */
+  retime(eventId: string, developmentId: string | undefined, fadeAt: number): void {
+    for (const q of this.queue) if (q.eventId === eventId && q.developmentId === developmentId) q.fadeAt = fadeAt;
+    const list = this.byEvent.get(eventId);
+    if (list) for (const p of list) if (p.developmentId === developmentId) p.fadeAt = fadeAt;
+    this.toneTimer = 0;
+  }
+
   /** Event expired or hidden: its grains leave the sand (and may be poured again later). */
   forgetEvent(eventId: string): void {
     const list = this.byEvent.get(eventId);
@@ -358,7 +394,9 @@ export class SandSimulation {
     const x =
       req.x != null
         ? req.x * w
-        : (this.roomyX(r, wander) ??
+        : this.organized
+          ? this.organizedX(req.impact, r)
+          : (this.roomyX(r, wander) ??
           (Math.random() < 0.55 ? wander * w + (Math.random() - 0.5) * w * 0.18 : Math.random() * w));
     const p = createParticle({
       eventId: req.eventId,
@@ -371,7 +409,7 @@ export class SandSimulation {
       bornAt: this.engine.time,
       newsAt: req.newsAt,
       fadeAt: req.fadeAt,
-      vx: req.x != null ? 0 : (Math.random() - 0.5) * 10,
+      vx: req.x != null || this.organized ? 0 : (Math.random() - 0.5) * 10,
       vy: 20 + Math.random() * 20,
     });
     p.tone = toneFor(p.newsAt, p.fadeAt);

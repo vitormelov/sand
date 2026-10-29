@@ -3,11 +3,16 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Root } from '../../src/Root';
-import { FakeEventSource, installDomStubs } from './setup-dom';
+import { accountModule, fakeAccount, fakeFirestore } from './fakeFirebase';
+import { installDomStubs } from './setup-dom';
+
+vi.mock('../../src/services/account', async () => (await import('./fakeFirebase')).accountModule);
+vi.mock('../../src/services/firebase', async () => (await import('./fakeFirebase')).firebaseModule);
+vi.mock('firebase/firestore', async () => (await import('./fakeFirebase')).firestoreModule);
 
 type Handler = (url: string, init?: RequestInit) => { status?: number; body: unknown } | undefined;
 
-/** Routes fetch calls to small handlers; records every call. */
+/** Routes fetch calls (city search) to small handlers; records every call. */
 function mockApi(handler: Handler) {
   const calls: { url: string; init?: RequestInit }[] = [];
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
@@ -23,8 +28,8 @@ const FORTALEZA = { name: 'Fortaleza', admin1: 'CE', admin1Name: 'Ceará', count
 
 beforeEach(() => {
   installDomStubs();
-  FakeEventSource.instances = [];
-  (globalThis as any).EventSource = FakeEventSource;
+  fakeAccount.reset();
+  fakeFirestore.subscriptions = 0;
 });
 afterEach(() => {
   cleanup();
@@ -33,13 +38,10 @@ afterEach(() => {
 
 describe('login and first-login questionnaire', () => {
   it('requires login; wrong password shows a clear error', async () => {
-    mockApi((url) => {
-      if (url === '/api/me') return { status: 401, body: { error: 'unauthenticated' } };
-      if (url === '/api/auth/login') return { status: 401, body: { error: 'invalid_credentials' } };
-    });
+    fakeAccount.loginError = 'invalid_credentials';
     render(<Root />);
     expect(await screen.findByRole('heading', { name: 'Entrar' })).toBeInTheDocument();
-    expect(FakeEventSource.instances).toHaveLength(0); // no news before login
+    expect(fakeFirestore.subscriptions).toBe(0); // no news before login
     // Behind the form: decorative sand only (hidden from screen readers, carries no news).
     const backdrop = document.querySelector('.auth-backdrop')!;
     expect(backdrop.getAttribute('aria-hidden')).toBe('true');
@@ -52,15 +54,8 @@ describe('login and first-login questionnaire', () => {
   });
 
   it('new account → questionnaire (manual city, preferences) → saved → sand', async () => {
-    let saved: any;
-    const calls = mockApi((url, init) => {
-      if (url === '/api/me') return { status: 401, body: {} };
-      if (url === '/api/auth/register') return { status: 201, body: { user: { email: 'eu@example.com' }, profile: null } };
+    const calls = mockApi((url) => {
       if (url.startsWith('/api/geocode?')) return { body: { results: [FORTALEZA], source: 'open-meteo' } };
-      if (url === '/api/me/profile') {
-        saved = JSON.parse(String(init!.body));
-        return { body: { profile: saved } };
-      }
     });
     render(<Root />);
     await userEvent.click(await screen.findByRole('button', { name: 'Criar conta' }));
@@ -96,8 +91,8 @@ describe('login and first-login questionnaire', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Violência e crimes' }));
     await userEvent.click(screen.getByRole('button', { name: 'Concluir' }));
 
-    await waitFor(() => expect(saved).toBeTruthy());
-    expect(saved).toMatchObject({
+    await waitFor(() => expect(fakeAccount.savedProfile).toBeTruthy());
+    expect(fakeAccount.savedProfile).toMatchObject({
       onboarded: true,
       location: { name: 'Fortaleza', admin1: 'CE' },
       locationSource: 'manual',
@@ -106,17 +101,15 @@ describe('login and first-login questionnaire', () => {
       routine: { transport: ['public'] },
       avoidTopics: ['violence'],
     });
-    const put = calls.find((c) => c.url === '/api/me/profile')!;
-    expect(put.init!.headers).toMatchObject({ 'X-Sand': '1' });
+    // City search goes to SAND's API with the user's ID token.
+    expect(calls.find((c) => c.url.startsWith('/api/geocode?'))!.init!.headers).toMatchObject({ Authorization: 'Bearer test-token' });
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Onde você mora?' })).toBeNull());
-    expect(FakeEventSource.instances.length).toBeGreaterThan(0); // news stream starts
+    expect(fakeFirestore.subscriptions).toBeGreaterThan(0); // news feed starts
   });
 
   it('GPS: the position is rounded (~11 km) before it leaves the browser', async () => {
-    const calls = mockApi((url) => {
-      if (url === '/api/me') return { body: { user: { email: 'eu@example.com' }, profile: null } };
-      if (url.startsWith('/api/geocode/reverse')) return { body: { result: FORTALEZA, source: 'nominatim' } };
-    });
+    fakeAccount.me = { email: 'eu@example.com', profile: null, viewed: [], saved: [] };
+    fakeAccount.reverseResult = FORTALEZA;
     Object.defineProperty(navigator, 'geolocation', {
       configurable: true,
       value: { getCurrentPosition: (ok: PositionCallback) => ok({ coords: { latitude: -3.731862, longitude: -38.526669 } } as GeolocationPosition) },
@@ -124,14 +117,13 @@ describe('login and first-login questionnaire', () => {
     render(<Root />);
     await userEvent.click(await screen.findByRole('button', { name: 'Usar minha localização (GPS)' }));
     expect(await screen.findByText(/Você está em/)).toHaveTextContent('Fortaleza, Ceará, Brasil');
-    const reverse = calls.find((c) => c.url.startsWith('/api/geocode/reverse'))!;
-    expect(reverse.url).toBe('/api/geocode/reverse?lat=-3.7&lon=-38.5');
+    expect(fakeAccount.reverseCalls).toEqual([[-3.7, -38.5]]);
     await userEvent.click(screen.getByRole('button', { name: 'Sim, usar esta cidade' }));
     expect(screen.getByRole('button', { name: 'Continuar' })).toBeEnabled();
   });
 
   it('denied GPS permission falls back to typing the city', async () => {
-    mockApi((url) => (url === '/api/me' ? { body: { user: { email: 'eu@example.com' }, profile: null } } : undefined));
+    fakeAccount.me = { email: 'eu@example.com', profile: null, viewed: [], saved: [] };
     Object.defineProperty(navigator, 'geolocation', {
       configurable: true,
       value: { getCurrentPosition: (_ok: PositionCallback, err: PositionErrorCallback) => err({ code: 1, PERMISSION_DENIED: 1 } as GeolocationPositionError) },
@@ -143,10 +135,20 @@ describe('login and first-login questionnaire', () => {
   });
 
   it('a returning user who already answered goes straight to the sand', async () => {
-    mockApi((url) => (url === '/api/me' ? { body: { user: { email: 'eu@example.com' }, profile: { onboarded: true, location: FORTALEZA, interests: [], affinity: {} } } } : undefined));
+    fakeAccount.me = { email: 'eu@example.com', profile: { onboarded: true, location: FORTALEZA, interests: [], affinity: {} } as any, viewed: [], saved: [] };
     render(<Root />);
-    await waitFor(() => expect(FakeEventSource.instances.length).toBeGreaterThan(0));
+    await waitFor(() => expect(fakeFirestore.subscriptions).toBeGreaterThan(0));
     expect(screen.queryByRole('heading', { name: 'Onde você mora?' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Entrar' })).toBeNull();
+  });
+
+  it('forgot password: asks for the e-mail, then confirms the link was sent', async () => {
+    render(<Root />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Esqueci a senha' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Digite seu e-mail');
+    await userEvent.type(screen.getByLabelText('E-mail'), 'eu@example.com');
+    await userEvent.click(screen.getByRole('button', { name: 'Esqueci a senha' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('enviamos um link');
+    expect(accountModule.resetPassword).toHaveBeenCalledWith('eu@example.com');
   });
 });

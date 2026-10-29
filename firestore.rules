@@ -1,0 +1,77 @@
+rules_version = '2';
+
+// SAND — who can read and write what. The ingestion job uses the Admin SDK, which
+// bypasses these rules; browsers only get what is allowed here.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function owner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function eventIdOk(id) {
+      return id.matches('ev_[a-z0-9]{1,40}');
+    }
+
+    // News (hour buckets + sources' status): read-only, and only with an account.
+    match /feed/{doc} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    // Ingestion state: the job only.
+    match /ingest/{doc} {
+      allow read, write: if false;
+    }
+
+    // Each account sees and changes only its own documents.
+    match /users/{uid} {
+      allow read, delete: if owner(uid);
+      allow create, update: if owner(uid)
+        && request.resource.data.keys().hasOnly(['profile', 'updatedAt'])
+        && request.resource.data.profile is string
+        && request.resource.data.profile.size() < 20000;
+
+      match /saved/{eventId} {
+        allow read, delete: if owner(uid);
+        allow create, update: if owner(uid)
+          && eventIdOk(eventId)
+          && request.resource.data.id == eventId
+          && request.resource.data.keys().hasOnly(['id', 'title', 'url', 'sourceName', 'publishedAt', 'summary', 'savedAt'])
+          && request.resource.data.title is string && request.resource.data.title.size() <= 300
+          && request.resource.data.url is string && request.resource.data.url.size() <= 2000
+          && request.resource.data.url.matches('https?://.*');
+      }
+
+      match /meta/viewed {
+        allow read, delete: if owner(uid);
+        allow create, update: if owner(uid)
+          && request.resource.data.keys().hasOnly(['ids'])
+          && request.resource.data.ids is list
+          && request.resource.data.ids.size() <= 2000;
+      }
+    }
+
+    // Anonymous "relevant / not relevant" counters: a signed-in user may only add 1 to one of them.
+    match /feedback/{eventId} {
+      function counterKeysOnly() {
+        return request.resource.data.keys().hasOnly(['relevant', 'not_relevant']);
+      }
+      allow create: if signedIn() && eventIdOk(eventId) && counterKeysOnly()
+        && request.resource.data.size() == 1
+        && request.resource.data.values()[0] == 1;
+      allow update: if signedIn() && counterKeysOnly()
+        && request.resource.data.diff(resource.data).affectedKeys().size() == 1
+        && (
+          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['relevant'])
+            && request.resource.data.relevant == resource.data.get('relevant', 0) + 1)
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['not_relevant'])
+            && request.resource.data.not_relevant == resource.data.get('not_relevant', 0) + 1)
+        );
+    }
+  }
+}

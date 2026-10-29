@@ -1,105 +1,101 @@
-import type { NewsEvent, StreamEventMessage, StreamStatus } from '../../shared/types';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { FEED_COLLECTION, FEED_META_ID, parseBucket, parseMeta, type FeedBucketDoc, type FeedMetaDoc } from '../../shared/feed';
+import type { NewsEvent, StreamEventMessage } from '../../shared/types';
 import type { SandStore } from '../state/store';
+import { db } from './firebase';
+
+/** One document of the `feed` collection: an hour of events, or `_meta` (sources' status). */
+export interface FeedDoc {
+  id: string;
+  data: Partial<FeedBucketDoc & FeedMetaDoc>;
+}
+
+/** Where the feed comes from: Firestore in the app, a fake in tests. */
+export interface FeedSource {
+  subscribe(onDocs: (docs: FeedDoc[], fromCache: boolean) => void, onError: (err: unknown) => void): () => void;
+}
+
+export const firestoreFeed: FeedSource = {
+  subscribe(onDocs, onError) {
+    return onSnapshot(
+      collection(db(), FEED_COLLECTION),
+      { includeMetadataChanges: true },
+      (snap) => onDocs(snap.docs.map((d) => ({ id: d.id, data: d.data() as FeedDoc['data'] })), snap.metadata.fromCache),
+      onError,
+    );
+  },
+};
+
+/** What changed between two versions of the feed, in the stream's terms. */
+export function diffFeed(prev: Map<string, NewsEvent>, next: Map<string, NewsEvent>): { messages: StreamEventMessage[]; expired: string[] } {
+  const messages: StreamEventMessage[] = [];
+  for (const [id, e] of next) {
+    const old = prev.get(id);
+    if (!old) {
+      messages.push({ change: 'new', event: e });
+      continue;
+    }
+    const known = new Set(old.developments.map((d) => d.id));
+    const fresh = e.developments.filter((d) => !known.has(d.id));
+    for (const d of fresh) messages.push({ change: 'development', event: e, developmentId: d.id });
+    if (!fresh.length && (e.seq !== old.seq || e.updatedAt !== old.updatedAt)) messages.push({ change: 'update', event: e });
+  }
+  const expired = [...prev.keys()].filter((id) => !next.has(id));
+  return { messages, expired };
+}
 
 /**
- * SSE client. EventSource reconnects by itself and sends Last-Event-ID, so the
- * server replays only what changed. If the browser gives up (non-200, e.g. the
- * server was restarting), we reconnect manually with exponential backoff and
- * `?since=<last seq>`.
+ * Realtime news from Firestore. The first snapshot fills the sand; later snapshots
+ * (each ingestion pass) are diffed into new events, developments, updates and expiries.
  */
 export class StreamClient {
-  private es?: EventSource;
-  private lastSeq = 0;
-  private retryMs = 3_000;
-  private timer?: ReturnType<typeof setTimeout>;
-  private closed = false;
+  private events = new Map<string, NewsEvent>();
+  private loaded = false;
+  private unsubscribe?: () => void;
 
   constructor(
     private store: SandStore,
-    private url = '/api/stream',
+    private source: FeedSource = firestoreFeed,
   ) {}
 
   start(): void {
-    this.closed = false;
-    this.connect();
     window.addEventListener('online', this.onOnline);
     window.addEventListener('offline', this.onOffline);
+    this.unsubscribe = this.source.subscribe(
+      (docs, fromCache) => this.apply(docs, fromCache),
+      () => this.store.setConnection(navigator.onLine === false ? 'offline' : 'reconnecting'),
+    );
   }
 
   stop(): void {
-    this.closed = true;
-    clearTimeout(this.timer);
-    this.es?.close();
+    this.unsubscribe?.();
     window.removeEventListener('online', this.onOnline);
     window.removeEventListener('offline', this.onOffline);
   }
 
-  private onOnline = () => {
-    if (this.es?.readyState !== EventSource.OPEN) {
-      this.retryMs = 3_000;
-      this.reconnectSoon(200);
-    }
-  };
-
+  private onOnline = () => this.store.setConnection(this.loaded ? 'open' : 'connecting');
   private onOffline = () => this.store.setConnection('offline');
 
-  private connect(): void {
-    if (this.closed) return;
-    this.es?.close();
-    const url = this.lastSeq > 0 ? `${this.url}?since=${this.lastSeq}` : this.url;
-    const es = new EventSource(url);
-    this.es = es;
-
-    es.onopen = () => {
-      this.retryMs = 3_000;
-      this.store.setConnection('open');
-    };
-    es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) {
-        this.store.setConnection(navigator.onLine === false ? 'offline' : 'reconnecting');
-        this.reconnectSoon(this.retryMs);
-        this.retryMs = Math.min(60_000, this.retryMs * 2);
-      } else {
-        this.store.setConnection(navigator.onLine === false ? 'offline' : 'reconnecting');
-      }
-    };
-    es.addEventListener('snapshot', (ev) => {
-      const data = safeParse<{ events: NewsEvent[]; status: StreamStatus }>((ev as MessageEvent).data);
-      if (!data) return;
-      this.trackSeq(ev as MessageEvent);
-      this.store.applySnapshot(data.events, data.status);
-    });
-    es.addEventListener('event', (ev) => {
-      const msg = safeParse<StreamEventMessage>((ev as MessageEvent).data);
-      if (!msg?.event?.id) return;
-      this.trackSeq(ev as MessageEvent);
-      this.store.applyEvent(msg);
-    });
-    es.addEventListener('status', (ev) => {
-      const s = safeParse<StreamStatus>((ev as MessageEvent).data);
-      if (s) this.store.applyStatus(s);
-    });
-    es.addEventListener('expire', (ev) => {
-      const d = safeParse<{ ids: string[] }>((ev as MessageEvent).data);
-      if (d?.ids) this.store.expire(d.ids);
-    });
-  }
-
-  private trackSeq(ev: MessageEvent): void {
-    const id = Number(ev.lastEventId);
-    if (Number.isFinite(id) && id > this.lastSeq) this.lastSeq = id;
-  }
-
-  private reconnectSoon(ms: number): void {
-    clearTimeout(this.timer);
-    this.timer = setTimeout(() => this.connect(), ms);
-  }
-}
-
-function safeParse<T>(s: string): T | undefined {
-  try {
-    return JSON.parse(s) as T;
-  } catch {
-    return undefined;
+  private apply(docs: FeedDoc[], fromCache: boolean): void {
+    const next = new Map<string, NewsEvent>();
+    let status;
+    for (const d of docs) {
+      if (d.id === FEED_META_ID) status = parseMeta(d.data);
+      else for (const e of parseBucket(d.data)) next.set(e.id, e);
+    }
+    if (!this.loaded) {
+      // The local cache may answer first with nothing; wait for the server's view.
+      if (fromCache && !next.size) return;
+      this.loaded = true;
+      this.events = next;
+      this.store.applySnapshot([...next.values()].sort((a, b) => a.seq - b.seq), status ?? { sources: [], serverTime: new Date().toISOString(), eventCount: next.size });
+      return;
+    }
+    const { messages, expired } = diffFeed(this.events, next);
+    this.events = next;
+    for (const m of messages) this.store.applyEvent(m);
+    if (expired.length) this.store.expire(expired);
+    if (status) this.store.applyStatus(status);
+    this.store.setConnection(fromCache && navigator.onLine === false ? 'offline' : 'open');
   }
 }

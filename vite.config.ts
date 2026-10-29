@@ -1,20 +1,28 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig, type Plugin } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { existsSync } from 'node:fs';
 
-// Same .env as the API, so the proxy targets the right SAND_API_PORT.
+// The same .env the ingestion script reads (Firebase project, service account).
 if (existsSync('.env')) process.loadEnvFile('.env');
 
-const apiPort = Number(process.env.SAND_API_PORT ?? 8787);
+/** In development, /api/geocode* runs the same handler the Vercel function runs. */
+function localApi(): Plugin {
+  return {
+    name: 'sand-local-api',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url?.startsWith('/api/geocode')) return next();
+        const { geocodeNodeHandler } = await server.ssrLoadModule('/server/http/geocodeApi.ts');
+        await geocodeNodeHandler(req, res);
+      });
+    },
+  };
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), localApi()],
   server: {
-    // PORT (if set) belongs to the web dev server; the API uses SAND_API_PORT.
     port: Number(process.env.PORT ?? 5173),
-    proxy: {
-      '/api': { target: `http://localhost:${apiPort}`, changeOrigin: false },
-    },
   },
   build: { outDir: 'dist', sourcemap: true },
   test: {

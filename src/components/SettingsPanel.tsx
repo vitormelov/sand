@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { categoryLabel } from '../../shared/impact/engine';
 import type { StoredProfile } from '../../shared/profile';
-import { SOURCE_GROUPS, type SourceGroup, type SourceKind, type SourceStatus } from '../../shared/types';
+import { CATEGORIES, SOURCE_GROUPS, type SourceGroup, type SourceKind, type SourceStatus } from '../../shared/types';
 import type { AccountProps } from '../App';
 import { ApiError, changePassword, deleteAccount, ERROR_TEXT } from '../services/account';
 import type { Prefs } from '../services/storage';
@@ -288,7 +289,21 @@ export function SettingsPanel({ prefs, profile, sources, account, onProfileChang
       </section>
 
       <section className="sheet__section">
+        <h3>Período</h3>
+        <Range label="Notícias das últimas" value={prefs.windowHours} min={12} max={48} step={1} onChange={(v) => onChange({ windowHours: v })} format={(h) => `${h} h`} />
+        <p className="hint">Notícias mais antigas que isso saem da areia e da lista. Os grãos clareiam até sumir ao fim do período.</p>
+      </section>
+
+      <section className="sheet__section">
         <h3>Areia</h3>
+        <div className="segmented" role="radiogroup" aria-label="Disposição dos grãos">
+          {(['natural', 'organized'] as const).map((l) => (
+            <button key={l} role="radio" aria-checked={prefs.layout === l} className={prefs.layout === l ? 'is-on' : ''} onClick={() => onChange({ layout: l })}>
+              {l === 'natural' ? 'Natural' : 'Organizado'}
+            </button>
+          ))}
+        </div>
+        {prefs.layout === 'organized' && <p className="hint">Os grãos caem por impacto: menor à esquerda, maior à direita.</p>}
         <div className="segmented" role="radiogroup" aria-label="Densidade visual">
           {(['low', 'normal', 'high'] as const).map((d) => (
             <button key={d} role="radio" aria-checked={prefs.density === d} className={prefs.density === d ? 'is-on' : ''} onClick={() => onChange({ density: d })}>
@@ -331,6 +346,31 @@ export function SettingsPanel({ prefs, profile, sources, account, onProfileChang
         <Toggle label="Mostrar indicadores" checked={prefs.showIndicators} onChange={(v) => onChange({ showIndicators: v })} />
         <Toggle label="Avisos de situações críticas" hint="Uma linha discreta no topo quando houver risco imediato perto de você." checked={prefs.criticalAlerts} onChange={(v) => onChange({ criticalAlerts: v })} />
         <Toggle label="Som" hint="Um toque quase inaudível quando grãos maiores assentam." checked={prefs.sound} onChange={(v) => onChange({ sound: v })} />
+      </section>
+
+      <section className="sheet__section">
+        <h3>Categorias</h3>
+        <p className="hint">Quais categorias caem na areia (pela categoria principal da notícia):</p>
+        <div className="chips" role="group" aria-label="Categorias que caem">
+          {CATEGORIES.map((c) => {
+            const on = !prefs.hiddenCategories.includes(c);
+            return (
+              <button
+                key={c}
+                className={on ? 'chip chip--on' : 'chip'}
+                aria-pressed={on}
+                onClick={() => onChange({ hiddenCategories: on ? [...prefs.hiddenCategories, c] : prefs.hiddenCategories.filter((x) => x !== c) })}
+              >
+                {categoryLabel(c)}
+              </button>
+            );
+          })}
+        </div>
+        {prefs.hiddenCategories.length > 0 && (
+          <button className="link-btn" onClick={() => onChange({ hiddenCategories: [] })}>
+            Mostrar todas
+          </button>
+        )}
       </section>
 
       <SourcesSection sources={sources} hidden={profile.hiddenSources ?? []} onChange={(hiddenSources) => onProfileChange({ ...profile, hiddenSources })} />

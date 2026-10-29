@@ -27,6 +27,12 @@ export interface Prefs {
   mapIntensity: number;
   /** A balloon with the news title rides beside each grain while it falls. */
   fallingTitles: boolean;
+  /** Show only news from the last N hours (12–48). */
+  windowHours: number;
+  /** 'organized': grains fall by impact, lowest on the left, highest on the right. */
+  layout: 'natural' | 'organized';
+  /** Main categories the user chose not to see fall. */
+  hiddenCategories: Category[];
   theme: 'auto' | 'light' | 'dark';
 }
 
@@ -47,6 +53,9 @@ export const DEFAULT_PREFS: Prefs = {
   showMap: true,
   mapIntensity: 1,
   fallingTitles: true,
+  windowHours: 48,
+  layout: 'natural',
+  hiddenCategories: [],
   // First visit: black background. People can switch to light or to the system setting.
   theme: 'dark',
 };
@@ -93,6 +102,9 @@ export function sanitizePrefs(raw: unknown): Prefs {
     showMap: typeof r.showMap === 'boolean' ? r.showMap : true,
     mapIntensity: num(r.mapIntensity, 0.2, 2, 1),
     fallingTitles: typeof r.fallingTitles === 'boolean' ? r.fallingTitles : true,
+    windowHours: Math.round(num(r.windowHours, 12, 48, 48)),
+    layout: r.layout === 'organized' ? 'organized' : 'natural',
+    hiddenCategories: Array.isArray(r.hiddenCategories) ? CATEGORIES.filter((c) => r.hiddenCategories.includes(c)) : [],
     theme: ['auto', 'light', 'dark'].includes(r.theme) ? r.theme : DEFAULT_PREFS.theme,
   };
 }

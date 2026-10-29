@@ -21,7 +21,7 @@ import { StatusBar, connectionText } from './components/StatusBar';
 import { sendFeedback } from './services/api';
 import { startDemo } from './services/demo';
 import { clearAllLocal, DEFAULT_PREFS, loadFeedback, loadPrefs, saveFeedback, savePrefs, type FeedbackValue, type Prefs } from './services/storage';
-import { StreamClient } from './services/stream';
+import { StreamClient, type FeedSource } from './services/stream';
 import { viewScale, type SandSimulation, type SimSettings } from './simulation/SandSimulation';
 import { SandStore, useStoreState } from './state/store';
 import { useTheme } from './services/theme';
@@ -75,7 +75,18 @@ function writeLocal(key: string, value: unknown): void {
 
 const query = new URLSearchParams(window.location.search);
 
-export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab'), account }: { demo?: boolean; lab?: boolean; account?: AccountProps }) {
+export function App({
+  demo: demoProp = query.has('demo'),
+  lab = query.has('lab'),
+  account,
+  feedSource,
+}: {
+  demo?: boolean;
+  lab?: boolean;
+  account?: AccountProps;
+  /** Where the news comes from (Firestore by default; a fake in tests). */
+  feedSource?: FeedSource;
+}) {
   // The lab is a fictitious-data mode too: the real stream is never connected there.
   const demo = demoProp || lab;
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
@@ -99,10 +110,18 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
   const store = useMemo(() => {
     const s = new SandStore(profile, demo);
     s.setHiddenSources(profile.hiddenSources ?? []);
+    s.setWindowHours(prefs.windowHours);
+    s.setHiddenCategories(prefs.hiddenCategories);
     return s;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const ui = useStoreState(store);
   useEffect(() => store.setHiddenSources(profile.hiddenSources ?? []), [profile.hiddenSources, store]);
+  useEffect(() => store.setWindowHours(prefs.windowHours), [prefs.windowHours, store]);
+  useEffect(() => store.setHiddenCategories(prefs.hiddenCategories), [prefs.hiddenCategories, store]);
+  useEffect(() => {
+    const t = setInterval(() => store.pruneWindow(), 60_000);
+    return () => clearInterval(t);
+  }, [store]);
   const simRef = useRef<SandSimulation | null>(null);
   // --- Seen and saved news -------------------------------------------------------
   // Kept in the account (or, in lab/demo, only in this browser).
@@ -171,10 +190,10 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
   useEffect(() => {
     if (lab) return;
     if (demo) return startDemo(store);
-    const client = new StreamClient(store);
+    const client = new StreamClient(store, feedSource);
     client.start();
     return () => client.stop();
-  }, [store, demo, lab]);
+  }, [store, demo, lab, feedSource]);
 
   // Persist preferences; recompute impact when what it depends on changes.
   useEffect(() => savePrefs(prefs), [prefs]);
@@ -211,8 +230,8 @@ export function App({ demo: demoProp = query.has('demo'), lab = query.has('lab')
   const chromeHidden = prefs.ambient && idle && panel === 'none' && !selected && !hovered && !privacy;
 
   const simSettings: SimSettings = useMemo(
-    () => ({ gravity: prefs.gravity, speed: prefs.speed, sizeScale: prefs.sizeScale, density: prefs.density, reducedMotion, sound: prefs.sound, theme, terrain: prefs.showMap, titles: prefs.fallingTitles }),
-    [prefs.gravity, prefs.speed, prefs.sizeScale, prefs.density, reducedMotion, prefs.sound, theme, prefs.showMap, prefs.fallingTitles],
+    () => ({ gravity: prefs.gravity, speed: prefs.speed, sizeScale: prefs.sizeScale, density: prefs.density, reducedMotion, sound: prefs.sound, theme, terrain: prefs.showMap, titles: prefs.fallingTitles, layout: prefs.layout}),
+    [prefs.gravity, prefs.speed, prefs.sizeScale, prefs.density, reducedMotion, prefs.sound, theme, prefs.showMap, prefs.fallingTitles, prefs.layout],
   );
 
   // Opening a news item (click, list, saved) marks it as seen.

@@ -32,7 +32,7 @@ export function StatusBar({ ui, prefs, store, hiddenSources }: { ui: UiState; pr
     <footer className="statusbar" aria-live="polite">
       <span>
         {ui.sessionCount} {ui.sessionCount === 1 ? 'evento' : 'eventos'} nesta sessão
-        {total ? ` · ${total} nas últimas horas` : ''}
+        {total ? ` · ${total} nas últimas ${prefs.windowHours} h` : ''}
       </span>
       <span>último às {formatClock(ui.lastReceivedAt ?? ui.status?.lastEventAt)}</span>
       {prefs.location && <span>{prefs.location.name}</span>}

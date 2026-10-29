@@ -5,6 +5,14 @@ import { HttpError, type SourceConnector } from '../sources/types';
 import type { NormalizedArticle } from '../types';
 
 const MAX_BACKOFF_MS = 60 * 60_000;
+/** A run-once pass also polls sources due within this slack (the next pass is ~5 min away). */
+const DUE_SLACK_MS = 60_000;
+
+/** What a run-once pass must remember about a source until the next pass. */
+export interface SourceRuntimeState {
+  failures: number;
+  status: SourceStatus;
+}
 
 interface Runtime {
   connector: SourceConnector;
@@ -64,6 +72,50 @@ export class Scheduler {
     for (const r of this.runtimes) clearTimeout(r.timer);
   }
 
+  /** Health and backoff of every source, to persist between run-once passes. */
+  exportRuntime(): Record<string, SourceRuntimeState> {
+    return Object.fromEntries(this.runtimes.map((r) => [r.connector.id, { failures: r.failures, status: { ...r.status } }]));
+  }
+
+  /** Restore what a previous pass saved (sources switched off since then keep 'disabled'). */
+  importRuntime(saved: Record<string, SourceRuntimeState | undefined>): void {
+    for (const r of this.runtimes) {
+      const s = saved[r.connector.id];
+      if (!s || !r.connector.enabled) continue;
+      r.failures = s.failures;
+      const { id, name, kind, group, paywall } = r.status;
+      r.status = { ...s.status, id, name, kind, group, paywall };
+    }
+  }
+
+  /**
+   * One pass for a scheduled job (no timers): polls every enabled source that is due,
+   * `concurrency` at a time, then sets when each should be tried next. Sources still
+   * running when `deadline` (epoch ms) passes are aborted and count as failures.
+   */
+  async runDue(now = Date.now(), concurrency = 6, deadline = now + 4 * 60_000): Promise<number> {
+    const due = this.runtimes.filter((r) => {
+      if (!r.connector.enabled) return false;
+      const next = r.status.nextAttemptAt ? Date.parse(r.status.nextAttemptAt) : NaN;
+      return !Number.isFinite(next) || next <= now + DUE_SLACK_MS;
+    });
+    const timer = setTimeout(() => this.abort.abort(), Math.max(0, deadline - Date.now()));
+    let i = 0;
+    const worker = async () => {
+      while (i < due.length && !this.stopped) {
+        const r = due[i++];
+        await this.poll(r);
+        r.status.nextAttemptAt = new Date(Date.now() + this.nextDelay(r)).toISOString();
+      }
+    };
+    try {
+      await Promise.all(Array.from({ length: Math.min(concurrency, due.length) }, worker));
+    } finally {
+      clearTimeout(timer);
+    }
+    return due.length;
+  }
+
   /** Run one connector immediately (used by tests and the verify script). */
   async runOnce(id: string): Promise<SourceStatus | undefined> {
     const r = this.runtimes.find((x) => x.connector.id === id);
@@ -77,18 +129,21 @@ export class Scheduler {
     clearTimeout(r.timer);
     r.status.nextAttemptAt = new Date(Date.now() + delayMs).toISOString();
     r.timer = setTimeout(() => {
-      void this.poll(r).finally(() => {
-        const base = r.connector.intervalMs;
-        const next =
-          r.failures === 0
-            ? base
-            : Math.min(MAX_BACKOFF_MS, Math.max(r.connector.minSpacingMs ?? 0, base * 2 ** Math.min(r.failures - 1, 6)));
-        const retryAfter = r.retryAfterMs ?? 0;
-        const jitter = 0.85 + Math.random() * 0.3;
-        this.schedule(r, Math.max(next * jitter, retryAfter));
-      });
+      void this.poll(r).finally(() => this.schedule(r, this.nextDelay(r)));
     }, delayMs);
     r.timer.unref?.();
+  }
+
+  /** Healthy: the source's interval. Failing: exponential backoff, honouring Retry-After. */
+  private nextDelay(r: Runtime): number {
+    const base = r.connector.intervalMs;
+    const next =
+      r.failures === 0
+        ? base
+        : Math.min(MAX_BACKOFF_MS, Math.max(r.connector.minSpacingMs ?? 0, base * 2 ** Math.min(r.failures - 1, 6)));
+    const retryAfter = r.retryAfterMs ?? 0;
+    const jitter = 0.85 + Math.random() * 0.3;
+    return Math.max(next * jitter, retryAfter);
   }
 
   private async poll(r: Runtime): Promise<void> {

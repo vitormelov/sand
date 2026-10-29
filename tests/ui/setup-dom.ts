@@ -1,4 +1,7 @@
 import { vi } from 'vitest';
+import { FEED_META_ID, groupByBucket } from '../../shared/feed';
+import type { NewsEvent, StreamStatus } from '../../shared/types';
+import type { FeedDoc, FeedSource } from '../../src/services/stream';
 
 /** Browser APIs jsdom lacks. The canvas is stubbed: these tests cover the UI, not pixels. */
 export function installDomStubs() {
@@ -16,37 +19,31 @@ export function installDomStubs() {
   localStorage.clear();
 }
 
-/** Controllable EventSource. */
-export class FakeEventSource {
-  static instances: FakeEventSource[] = [];
-  static OPEN = 1;
-  static CLOSED = 2;
-  readyState = 0;
-  onopen?: () => void;
-  onerror?: () => void;
-  private listeners = new Map<string, ((e: MessageEvent) => void)[]>();
-  constructor(public url: string) {
-    FakeEventSource.instances.push(this);
+/** Controllable news feed (what Firestore delivers in the app). */
+export class FakeFeed implements FeedSource {
+  static instances: FakeFeed[] = [];
+  private onDocs?: (docs: FeedDoc[], fromCache: boolean) => void;
+  private onError?: (err: unknown) => void;
+  constructor() {
+    FakeFeed.instances.push(this);
   }
-  addEventListener(type: string, fn: (e: MessageEvent) => void) {
-    this.listeners.set(type, [...(this.listeners.get(type) ?? []), fn]);
+  subscribe(onDocs: (docs: FeedDoc[], fromCache: boolean) => void, onError: (err: unknown) => void) {
+    this.onDocs = onDocs;
+    this.onError = onError;
+    return () => {
+      this.onDocs = undefined;
+    };
   }
-  close() {
-    this.readyState = 2;
+  /** The whole feed as it is now: these events (bucketed by hour) and this status. */
+  emit(events: NewsEvent[], status?: StreamStatus) {
+    const docs: FeedDoc[] = [...groupByBucket(events)].map(([id, evs]) => ({ id, data: { events: JSON.stringify(evs), updatedAt: '' } }));
+    if (status) docs.push({ id: FEED_META_ID, data: { status: JSON.stringify(status), updatedAt: '' } });
+    this.onDocs?.(docs, false);
   }
-  open() {
-    this.readyState = 1;
-    this.onopen?.();
-  }
-  fail(closed = false) {
-    this.readyState = closed ? 2 : 0;
-    this.onerror?.();
-  }
-  emit(type: string, data: unknown, id?: number) {
-    const ev = new MessageEvent(type, { data: JSON.stringify(data), lastEventId: id != null ? String(id) : '' });
-    for (const fn of this.listeners.get(type) ?? []) fn(ev);
+  fail() {
+    this.onError?.(new Error('unavailable'));
   }
   static latest() {
-    return FakeEventSource.instances[FakeEventSource.instances.length - 1];
+    return FakeFeed.instances[FakeFeed.instances.length - 1];
   }
 }

@@ -22,7 +22,7 @@ export function PrivacyDialog({ onClose }: { onClose: () => void }) {
         </div>
         <ul className="plain-list privacy">
           <li>
-            <strong>Conta:</strong> guardamos seu e-mail e um <em>hash</em> da senha (a senha em si nunca é armazenada). A sessão usa um cookie seguro, válido por 30 dias.
+            <strong>Conta:</strong> o login é feito pelo Firebase Authentication (Google), que guarda seu e-mail e um <em>hash</em> da senha (a senha em si nunca é armazenada). Suas respostas, notícias salvas e vistas ficam no Firestore, acessíveis só pela sua conta.
           </li>
           <li>
             <strong>Suas respostas</strong> (cidade, interesses, futebol, rotina, trabalho e finanças, outros lugares, temas a evitar) ficam na sua conta e servem só para estimar o impacto das notícias para você. Todas são opcionais, exceto a cidade.

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { App } from './App';
 import { AuthScreen } from './components/AuthScreen';
 import { SandBackdrop } from './components/SandBackdrop';
-import { fetchMe, logout, type Me } from './services/account';
+import { logout, watchSession, type Me } from './services/account';
+import { firebaseConfigured } from './services/firebase';
 import { loadPrefs } from './services/storage';
 import { useTheme } from './services/theme';
 
@@ -23,16 +24,26 @@ export function Root() {
     prefs.reducedMotion === 'on' || (prefs.reducedMotion === 'auto' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 
   useEffect(() => {
-    if (testMode) return;
-    fetchMe()
-      .then(setMe)
-      .catch(() => {
+    if (testMode || !firebaseConfigured) return;
+    return watchSession(
+      (m) => {
+        setOffline(false);
+        setMe(m);
+      },
+      () => {
         setOffline(true);
         setMe(null);
-      });
+      },
+    );
   }, [testMode]);
 
   if (testMode) return <App />;
+  if (!firebaseConfigured)
+    return (
+      <p className="empty-state">
+        Firebase não configurado: defina as variáveis VITE_FIREBASE_* (veja .env.example). Sem elas, só ?lab e ?demo funcionam.
+      </p>
+    );
   if (me === undefined) return <p className="empty-state">Carregando…</p>;
   if (!me)
     return (

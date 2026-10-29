@@ -10,7 +10,10 @@ import { connectionText } from '../../src/components/StatusBar';
 import { DEFAULT_PREFS } from '../../src/services/storage';
 import { sanitizePrefs } from '../../src/services/storage';
 import { FORTALEZA, event } from '../helpers';
+import { accountModule } from './fakeFirebase';
 import { installDomStubs } from './setup-dom';
+
+vi.mock('../../src/services/account', async () => (await import('./fakeFirebase')).accountModule);
 
 beforeEach(() => installDomStubs());
 afterEach(() => {
@@ -144,7 +147,6 @@ describe('SettingsPanel', () => {
     const onEditAnswers = vi.fn();
     const onLogout = vi.fn();
     const onDeleted = vi.fn();
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ ok: true })));
     render(
       <SettingsPanel
         prefs={{ ...DEFAULT_PREFS }}
@@ -167,11 +169,8 @@ describe('SettingsPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Excluir conta' }));
     await userEvent.type(screen.getByLabelText('Senha atual'), 'minha-senha-1');
     await userEvent.click(screen.getByRole('button', { name: 'Excluir minha conta' }));
-    const [url, init] = fetchMock.mock.calls.at(-1)!;
-    expect(url).toBe('/api/me');
-    expect((init as RequestInit).method).toBe('DELETE');
-    expect((init as RequestInit).headers).toMatchObject({ 'X-Sand': '1' });
-    expect(onDeleted).toHaveBeenCalled();
+    expect(accountModule.deleteAccount).toHaveBeenCalledWith('minha-senha-1');
+    await waitFor(() => expect(onDeleted).toHaveBeenCalled());
   });
 
   it('clears local visual preferences only after confirmation', async () => {
