@@ -91,7 +91,16 @@ describe('login and first-login questionnaire', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Violência e crimes' }));
     await userEvent.click(screen.getByRole('button', { name: 'Concluir' }));
 
-    await waitFor(() => expect(fakeAccount.savedProfile).toBeTruthy());
+    // Then, still on the first login, the SAND Conhecimento questions (not skippable this time).
+    expect(await screen.findByRole('heading', { name: 'Que áreas da ciência te interessam?' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Agora não' })).toBeNull();
+    await userEvent.click(screen.getAllByRole('radio', { name: 'Muito' })[0]); // Saúde e medicina
+    for (let i = 0; i < 4; i++) await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Concluir' }));
+    await waitFor(() => expect((fakeAccount.savedProfile as any)?.research?.onboarded).toBe(true));
+    expect((fakeAccount.savedProfile as any).research).toMatchObject({ themes: { health: 2 }, countries: ['BR'], languages: ['pt'], sizeBasis: 'balanced' });
+    expect(screen.queryByRole('heading', { name: 'Que áreas da ciência te interessam?' })).toBeNull();
+
     expect(fakeAccount.savedProfile).toMatchObject({
       onboarded: true,
       location: { name: 'Fortaleza', admin1: 'CE' },
@@ -134,12 +143,31 @@ describe('login and first-login questionnaire', () => {
     expect(screen.getByRole('combobox', { name: 'Buscar cidade' })).toBeInTheDocument();
   });
 
-  it('a returning user who already answered goes straight to the sand', async () => {
-    fakeAccount.me = { email: 'eu@example.com', profile: { onboarded: true, location: FORTALEZA, interests: [], affinity: {} } as any, viewed: [], saved: [] };
+  it('a returning user who already answered goes straight to the sand, and can redo the Conhecimento questions', async () => {
+    fakeAccount.me = {
+      email: 'eu@example.com',
+      profile: { onboarded: true, location: FORTALEZA, interests: [], affinity: {}, research: { onboarded: true } } as any,
+      viewed: [],
+      saved: [],
+    };
     render(<Root />);
     await waitFor(() => expect(fakeFirestore.subscriptions).toBeGreaterThan(0));
     expect(screen.queryByRole('heading', { name: 'Onde você mora?' })).toBeNull();
     expect(screen.queryByRole('heading', { name: 'Entrar' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Que áreas da ciência te interessam?' })).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Configurações' }));
+    await userEvent.click(screen.getByRole('button', { name: /Refazer as perguntas do Conhecimento/ }));
+    expect(await screen.findByRole('heading', { name: 'Que áreas da ciência te interessam?' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Agora não' })); // redoing can be cancelled
+    expect(screen.queryByRole('heading', { name: 'Que áreas da ciência te interessam?' })).toBeNull();
+  });
+
+  it('an account from before SAND Conhecimento is asked its questions once', async () => {
+    fakeAccount.me = { email: 'eu@example.com', profile: { onboarded: true, location: FORTALEZA, interests: [], affinity: {} } as any, viewed: [], saved: [] };
+    render(<Root />);
+    expect(await screen.findByRole('heading', { name: 'Que áreas da ciência te interessam?' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Onde você mora?' })).toBeNull();
   });
 
   it('forgot password: asks for the e-mail, then confirms the link was sent', async () => {

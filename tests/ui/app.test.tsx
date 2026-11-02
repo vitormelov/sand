@@ -134,7 +134,6 @@ describe('App', () => {
 
     await userEvent.click(screen.getByRole('radio', { name: 'Conhecimento' }));
     expect(screen.getByRole('radio', { name: 'Conhecimento' })).toHaveAttribute('aria-checked', 'true');
-    expect(JSON.parse(localStorage.getItem('sand:prefs:v1')!).mode).toBe('research');
     expect(await screen.findByText('Conectando à base de pesquisas…')).toBeInTheDocument();
     const paper = event({
       id: 'ev_w4417175683',
@@ -150,5 +149,14 @@ describe('App', () => {
 
     await userEvent.click(screen.getByRole('radio', { name: 'Notícias' }));
     expect(screen.getByRole('button', { name: 'Notícias recentes' })).toBeInTheDocument();
+  });
+
+  it('always opens on SAND Notícias, even after the last visit ended on Conhecimento', async () => {
+    const first = render(<App demo={false} feedSource={new FakeFeed()} />);
+    await userEvent.click(screen.getByRole('radio', { name: 'Conhecimento' }));
+    first.unmount();
+    render(<App demo={false} feedSource={new FakeFeed()} />);
+    expect(screen.getByRole('radio', { name: 'Notícias' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('Conectando às fontes de notícias…')).toBeInTheDocument();
   });
 });

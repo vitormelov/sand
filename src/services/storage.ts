@@ -29,8 +29,6 @@ export interface Prefs {
   fallingTitles: boolean;
   /** Show only news from the last N hours (12–48). */
   windowHours: number;
-  /** Which side of SAND is shown: the news, or recent research (SAND Conhecimento). */
-  mode: 'news' | 'research';
   /** 'organized': grains fall by impact, lowest on the left, highest on the right. */
   layout: 'natural' | 'organized';
   /** Main categories the user chose not to see fall. */
@@ -56,7 +54,6 @@ export const DEFAULT_PREFS: Prefs = {
   mapIntensity: 1,
   fallingTitles: true,
   windowHours: 48,
-  mode: 'news',
   layout: 'natural',
   hiddenCategories: [],
   // First visit: black background. People can switch to light or to the system setting.
@@ -106,7 +103,6 @@ export function sanitizePrefs(raw: unknown): Prefs {
     mapIntensity: num(r.mapIntensity, 0.2, 2, 1),
     fallingTitles: typeof r.fallingTitles === 'boolean' ? r.fallingTitles : true,
     windowHours: Math.round(num(r.windowHours, 12, 48, 48)),
-    mode: r.mode === 'research' ? 'research' : 'news',
     layout: r.layout === 'organized' ? 'organized' : 'natural',
     hiddenCategories: Array.isArray(r.hiddenCategories) ? CATEGORIES.filter((c) => r.hiddenCategories.includes(c)) : [],
     theme: ['auto', 'light', 'dark'].includes(r.theme) ? r.theme : DEFAULT_PREFS.theme,

@@ -94,9 +94,8 @@ export function App({
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
   const [profile, setProfile] = useState<StoredProfile>(() => account?.profile ?? localProfile(loadPrefs()));
   const [questionnaire, setQuestionnaire] = useState(!!account && !account.profile.onboarded);
-  // SAND Conhecimento has its own questions: asked the first time someone opens it.
+  // SAND Conhecimento has its own questions (asked once at first login; redone from the settings).
   const [researchQuestions, setResearchQuestions] = useState(false);
-  const [researchQuestionsDismissed, setResearchQuestionsDismissed] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
   /** Profile changes are saved to the account (debounced) or, without one, to this browser. */
   const updateProfile = useCallback(
@@ -114,7 +113,8 @@ export function App({
   const [feedback, setFeedback] = useState(loadFeedback);
   // Two sides of SAND: the news, and recent research (SAND Conhecimento). Each has its own
   // store, feed and sand; switching pours the other one.
-  const mode = prefs.mode;
+  // Which side is shown. Not remembered: SAND always opens on the news.
+  const [mode, setMode] = useState<'news' | 'research'>('news');
   const research = mode === 'research';
   const windowHours = research ? RESEARCH_WINDOW_HOURS : prefs.windowHours;
   const store = useMemo(() => {
@@ -366,7 +366,7 @@ export function App({
                 setSelected(null);
                 setHovered(null);
                 setPanel('none');
-                update({ mode: m });
+                setMode(m);
               }}
             >
               {m === 'news' ? 'Notícias' : 'Conhecimento'}
@@ -499,13 +499,12 @@ export function App({
         />
       )}
 
-      {account && !questionnaire && (researchQuestions || (research && !profile.research?.onboarded && !researchQuestionsDismissed)) && (
+      {/* Right after the news questions on the first login (and for accounts made before
+          SAND Conhecimento existed): its own questions, which can't be skipped the first time. */}
+      {account && !questionnaire && (researchQuestions || !profile.research?.onboarded) && (
         <ResearchQuestionnaire
           initial={profile}
-          onCancel={() => {
-            setResearchQuestions(false);
-            setResearchQuestionsDismissed(true);
-          }}
+          onCancel={profile.research?.onboarded ? () => setResearchQuestions(false) : undefined}
           onDone={(p) => {
             setResearchQuestions(false);
             clearTimeout(saveTimer.current);
