@@ -13,6 +13,7 @@
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "build:vercel": "tsx scripts/build-vercel.ts",
     "ingest": "tsx scripts/ingest-once.ts",
+    "ingest:research": "tsx scripts/ingest-research.ts",
     "deploy:rules": "tsx scripts/deploy-rules.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",

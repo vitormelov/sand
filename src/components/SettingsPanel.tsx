@@ -49,6 +49,7 @@ const KIND_LABEL: Record<SourceKind, string> = {
   agency: 'Agência de notícias',
   outlet: 'Veículo de imprensa',
   aggregator: 'Agregador',
+  journal: 'Base de pesquisas científicas',
 };
 
 const GROUP_LABEL: Record<SourceGroup, string> = {
@@ -61,6 +62,7 @@ const GROUP_LABEL: Record<SourceGroup, string> = {
   sports: 'Esporte',
   international: 'Internacionais',
   aggregators: 'Agregadores',
+  research: 'Pesquisas científicas',
 };
 
 function sourceHint(s: SourceStatus): string {

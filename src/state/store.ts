@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { IMPACT_BANDS } from '../../shared/impact/config';
 import { computeImpact, type ImpactResult } from '../../shared/impact/engine';
+import { researchImpact } from '../../shared/impact/research';
 import type { Category, NewsEvent, StreamEventMessage, StreamStatus, UserProfile } from '../../shared/types';
 
 export type Connection = 'connecting' | 'open' | 'reconnecting' | 'offline';
@@ -43,8 +44,10 @@ export class SandStore {
   private hiddenSources = new Set<string>();
   /** Categories the user chose not to see (by the news' main category). */
   private hiddenCategories = new Set<Category>();
-  /** Only news from the last `windowMs` is shown (user-chosen, 12–48 h). */
-  private windowMs = MAX_WINDOW_HOURS * HOUR;
+  /** Only news from the last `windowMs` is shown (user-chosen, 12–48 h; research: 30 days). */
+  private windowMs: number;
+  /** The longest window: the server's retention (48 h for news, 30 days for research). */
+  private maxWindowMs: number;
   /** Source name → id, for events stored before they carried `sourceIds`. */
   private sourceIdByName = new Map<string, string>();
   readonly impacts = new Map<string, ImpactResult>();
@@ -56,7 +59,9 @@ export class SandStore {
   constructor(
     private profile: UserProfile,
     demo = false,
+    maxWindowHours = MAX_WINDOW_HOURS,
   ) {
+    this.maxWindowMs = this.windowMs = maxWindowHours * HOUR;
     this.state = { version: 0, connection: demo ? 'open' : 'connecting', snapshotLoaded: false, sessionCount: 0, demo };
   }
 
@@ -135,7 +140,7 @@ export class SandStore {
   /** At least one of its grains (the news or a development) is newer than the window. */
   private inWindow(e: NewsEvent, now = Date.now()): boolean {
     // The full window is the server's retention: it expires events itself, as before.
-    if (this.windowMs >= MAX_WINDOW_HOURS * HOUR) return true;
+    if (this.windowMs >= this.maxWindowMs) return true;
     if (timing(e, undefined, this.windowMs).fadeAt > now) return true;
     return e.developments.some((d) => timing(e, d.at, this.windowMs).fadeAt > now);
   }
@@ -146,7 +151,7 @@ export class SandStore {
 
   /** Show only news from the last `hours` (12–48). Older grains leave; grains back in range pour again. */
   setWindowHours(hours: number): void {
-    const ms = Math.min(MAX_WINDOW_HOURS, Math.max(MIN_WINDOW_HOURS, hours)) * HOUR;
+    const ms = Math.min(this.maxWindowMs, Math.max(MIN_WINDOW_HOURS * HOUR, hours * HOUR));
     if (ms === this.windowMs) return;
     this.windowMs = ms;
     // Grains that stay keep their place and only change how fast they fade.
@@ -187,7 +192,8 @@ export class SandStore {
 
   // --- impact ---------------------------------------------------------------
   private score(e: NewsEvent): ImpactResult {
-    const r = computeImpact(e, this.profile);
+    // Research works mix personal relevance with their scientific weight (SAND Conhecimento).
+    const r = e.research ? researchImpact(e, this.profile) : computeImpact(e, this.profile);
     this.impacts.set(e.id, r);
     return r;
   }

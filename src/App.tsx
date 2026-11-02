@@ -21,9 +21,10 @@ import { StatusBar, connectionText } from './components/StatusBar';
 import { sendFeedback } from './services/api';
 import { startDemo } from './services/demo';
 import { clearAllLocal, DEFAULT_PREFS, loadFeedback, loadPrefs, saveFeedback, savePrefs, type FeedbackValue, type Prefs } from './services/storage';
-import { StreamClient, type FeedSource } from './services/stream';
+import { firestoreFeed, researchFeed, StreamClient, type FeedSource } from './services/stream';
 import { viewScale, type SandSimulation, type SimSettings } from './simulation/SandSimulation';
-import { SandStore, useStoreState } from './state/store';
+import { MAX_WINDOW_HOURS, SandStore, useStoreState } from './state/store';
+import { RESEARCH_WINDOW_HOURS } from '../shared/research';
 import { useTheme } from './services/theme';
 
 const IDLE_MS = 4_000;
@@ -107,16 +108,21 @@ export function App({
     [account],
   );
   const [feedback, setFeedback] = useState(loadFeedback);
+  // Two sides of SAND: the news, and recent research (SAND Conhecimento). Each has its own
+  // store, feed and sand; switching pours the other one.
+  const mode = prefs.mode;
+  const research = mode === 'research';
+  const windowHours = research ? RESEARCH_WINDOW_HOURS : prefs.windowHours;
   const store = useMemo(() => {
-    const s = new SandStore(profile, demo);
+    const s = new SandStore(profile, demo, research ? RESEARCH_WINDOW_HOURS : MAX_WINDOW_HOURS);
     s.setHiddenSources(profile.hiddenSources ?? []);
-    s.setWindowHours(prefs.windowHours);
+    s.setWindowHours(windowHours);
     s.setHiddenCategories(prefs.hiddenCategories);
     return s;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
   const ui = useStoreState(store);
   useEffect(() => store.setHiddenSources(profile.hiddenSources ?? []), [profile.hiddenSources, store]);
-  useEffect(() => store.setWindowHours(prefs.windowHours), [prefs.windowHours, store]);
+  useEffect(() => store.setWindowHours(windowHours), [windowHours, store]);
   useEffect(() => store.setHiddenCategories(prefs.hiddenCategories), [prefs.hiddenCategories, store]);
   useEffect(() => {
     const t = setInterval(() => store.pruneWindow(), 60_000);
@@ -129,10 +135,11 @@ export function App({
   const [saved, setSaved] = useState<SavedItem[]>(() => account?.saved ?? readLocal<SavedItem[]>(SAVED_KEY, []));
   const pendingViewed = useRef<string[]>([]);
   const viewedTimer = useRef<ReturnType<typeof setTimeout>>();
+  // A new sand (first mount, or after switching Notícias/Conhecimento) gets the seen marks.
   useEffect(() => {
     simRef.current?.setViewed(viewed);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [store]);
   const markSeen = useCallback(
     (id: string) => {
       if (viewed.has(id)) return;
@@ -190,9 +197,10 @@ export function App({
   useEffect(() => {
     if (lab) return;
     if (demo) return startDemo(store);
-    const client = new StreamClient(store, feedSource);
+    const client = new StreamClient(store, feedSource ?? (research ? researchFeed : firestoreFeed));
     client.start();
     return () => client.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store, demo, lab, feedSource]);
 
   // Persist preferences; recompute impact when what it depends on changes.
@@ -310,9 +318,13 @@ export function App({
       : !ui.snapshotLoaded
         ? ui.connection === 'reconnecting'
           ? 'Não foi possível conectar ao servidor do SAND. Tentando novamente…'
-          : 'Conectando às fontes de notícias…'
+          : research
+            ? 'Conectando à base de pesquisas…'
+            : 'Conectando às fontes de notícias…'
         : store.events.size === 0
-          ? 'Aguardando as primeiras notícias reais. Nada é inventado enquanto isso.'
+          ? research
+            ? 'Aguardando a primeira coleta de pesquisas (OpenAlex). Nada é inventado enquanto isso.'
+            : 'Aguardando as primeiras notícias reais. Nada é inventado enquanto isso.'
           : undefined
     : undefined;
 
@@ -338,12 +350,31 @@ export function App({
       <header className="topbar chrome">
         <span className="brand">SAND</span>
         <Clock />
+        <div className="mode-switch" role="radiogroup" aria-label="Vertente do SAND">
+          {(['news', 'research'] as const).map((m) => (
+            <button
+              key={m}
+              role="radio"
+              aria-checked={mode === m}
+              className={mode === m ? 'is-on' : ''}
+              onClick={() => {
+                if (m === mode) return;
+                setSelected(null);
+                setHovered(null);
+                setPanel('none');
+                update({ mode: m });
+              }}
+            >
+              {m === 'news' ? 'Notícias' : 'Conhecimento'}
+            </button>
+          ))}
+        </div>
         <nav className="topbar__actions" aria-label="Controles">
           <span className={`dot dot--${conn.tone}`} title={conn.label} aria-label={`Conexão: ${conn.label}`} role="img" />
           <button className="icon-btn" onClick={() => {
               setSelected(null);
               setPanel((p) => (p === 'recent' ? 'none' : 'recent'));
-            }} aria-label="Notícias recentes" aria-pressed={panel === 'recent'}>
+            }} aria-label={research ? 'Pesquisas recentes' : 'Notícias recentes'} aria-pressed={panel === 'recent'}>
             <IconList />
           </button>
           <button
@@ -386,7 +417,7 @@ export function App({
 
       {prefs.showIndicators && (
         <div className="chrome">
-          <StatusBar ui={ui} prefs={{ ...prefs, location: profile.location }} store={store} hiddenSources={profile.hiddenSources} />
+          <StatusBar ui={ui} prefs={{ ...prefs, location: profile.location }} store={store} hiddenSources={profile.hiddenSources} research={research} />
         </div>
       )}
 
@@ -435,7 +466,7 @@ export function App({
           }}
         />
       )}
-      {panel === 'recent' && <RecentList store={store} ui={ui} viewed={viewed} savedIds={savedIds} onOpen={openEvent} onClose={() => setPanel('none')} />}
+      {panel === 'recent' && <RecentList store={store} ui={ui} viewed={viewed} savedIds={savedIds} onOpen={openEvent} onClose={() => setPanel('none')} title={research ? 'Pesquisas recentes' : undefined} />}
       {panel === 'saved' && (
         <SavedList
           items={saved}

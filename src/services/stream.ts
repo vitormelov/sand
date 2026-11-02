@@ -1,5 +1,6 @@
 import { collection, onSnapshot } from 'firebase/firestore';
 import { FEED_COLLECTION, FEED_META_ID, parseBucket, parseMeta, type FeedBucketDoc, type FeedMetaDoc } from '../../shared/feed';
+import { RESEARCH_COLLECTION } from '../../shared/research';
 import type { NewsEvent, StreamEventMessage } from '../../shared/types';
 import type { SandStore } from '../state/store';
 import { db } from './firebase';
@@ -15,16 +16,22 @@ export interface FeedSource {
   subscribe(onDocs: (docs: FeedDoc[], fromCache: boolean) => void, onError: (err: unknown) => void): () => void;
 }
 
-export const firestoreFeed: FeedSource = {
-  subscribe(onDocs, onError) {
-    return onSnapshot(
-      collection(db(), FEED_COLLECTION),
-      { includeMetadataChanges: true },
-      (snap) => onDocs(snap.docs.map((d) => ({ id: d.id, data: d.data() as FeedDoc['data'] })), snap.metadata.fromCache),
-      onError,
-    );
-  },
-};
+/** A Firestore collection in the feed format: `feed` (news) or `research` (SAND Conhecimento). */
+export function collectionFeed(name: string): FeedSource {
+  return {
+    subscribe(onDocs, onError) {
+      return onSnapshot(
+        collection(db(), name),
+        { includeMetadataChanges: true },
+        (snap) => onDocs(snap.docs.map((d) => ({ id: d.id, data: d.data() as FeedDoc['data'] })), snap.metadata.fromCache),
+        onError,
+      );
+    },
+  };
+}
+
+export const firestoreFeed: FeedSource = collectionFeed(FEED_COLLECTION);
+export const researchFeed: FeedSource = collectionFeed(RESEARCH_COLLECTION);
 
 /** What changed between two versions of the feed, in the stream's terms. */
 export function diffFeed(prev: Map<string, NewsEvent>, next: Map<string, NewsEvent>): { messages: StreamEventMessage[]; expired: string[] } {

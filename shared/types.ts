@@ -107,10 +107,10 @@ export interface Analysis {
   classificationConfidence: number;
 }
 
-export type SourceKind = 'official' | 'agency' | 'outlet' | 'aggregator';
+export type SourceKind = 'official' | 'agency' | 'outlet' | 'aggregator' | 'journal';
 
 /** How sources are grouped in the settings list. */
-export const SOURCE_GROUPS = ['national', 'regional', 'official', 'alerts', 'climate', 'economy', 'sports', 'international', 'aggregators'] as const;
+export const SOURCE_GROUPS = ['national', 'regional', 'official', 'alerts', 'climate', 'economy', 'sports', 'international', 'aggregators', 'research'] as const;
 export type SourceGroup = (typeof SOURCE_GROUPS)[number];
 
 export type RelationKind = 'documented' | 'probable' | 'possible' | 'unconfirmed';
@@ -169,6 +169,29 @@ export interface NewsEvent {
   developments: Development[];
   /** Only ever true in explicit DEMO mode. Real events never set this. */
   demo?: boolean;
+  /** Set on research works (SAND Conhecimento): the scientific side of the grain's size. */
+  research?: ResearchInfo;
+}
+
+/** What SAND Conhecimento knows about a research work, besides the event fields. */
+export interface ResearchInfo {
+  /** Where it came from (e.g. "OpenAlex") and its id there. */
+  provider: string;
+  workId: string;
+  /** Times cited so far, and the field-weighted citation impact when known (1 = field average). */
+  citations: number;
+  fwci?: number;
+  /** Journal's mean citations per paper over 2 years (an impact-factor-like figure). */
+  journalImpact?: number;
+  /** 0..1 — scientific weight combining journal and citations; part of the grain size. */
+  weight: number;
+  field?: string;
+  topic?: string;
+  /** "First author et al." */
+  authors?: string;
+  openAccess?: boolean;
+  /** Countries of the authors' institutions (ISO-2). */
+  countries?: string[];
 }
 
 export type SourceHealth = 'ok' | 'degraded' | 'down' | 'disabled' | 'pending';

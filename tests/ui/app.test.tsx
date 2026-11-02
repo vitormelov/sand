@@ -124,4 +124,31 @@ describe('App', () => {
     await userEvent.click(screen.getByRole('radio', { name: 'Reduzido' }));
     expect(JSON.parse(localStorage.getItem('sand:prefs:v1')!).reducedMotion).toBe('on');
   });
+
+  it('switches between SAND Notícias and SAND Conhecimento, each with its own sand', async () => {
+    const feed = new FakeFeed();
+    render(<App demo={false} feedSource={feed} />);
+    act(() => feed.emit([event({ id: 'ev_news', title: 'Banco Central eleva a taxa Selic' })], status as any));
+    await userEvent.click(screen.getByRole('button', { name: 'Notícias recentes' }));
+    expect(await screen.findByText('Banco Central eleva a taxa Selic')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Conhecimento' }));
+    expect(screen.getByRole('radio', { name: 'Conhecimento' })).toHaveAttribute('aria-checked', 'true');
+    expect(JSON.parse(localStorage.getItem('sand:prefs:v1')!).mode).toBe('research');
+    expect(await screen.findByText('Conectando à base de pesquisas…')).toBeInTheDocument();
+    const paper = event({
+      id: 'ev_w4417175683',
+      title: 'Sequential diagnosis with language models',
+      sourceName: 'Science',
+      sourceKind: 'journal',
+      research: { provider: 'OpenAlex', workId: 'W4417175683', citations: 27, weight: 1 },
+    });
+    act(() => feed.emit([paper], status as any));
+    await userEvent.click(screen.getByRole('button', { name: 'Pesquisas recentes' }));
+    expect(await screen.findByText('Sequential diagnosis with language models')).toBeInTheDocument();
+    expect(screen.queryByText('Banco Central eleva a taxa Selic')).toBeNull();
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Notícias' }));
+    expect(screen.getByRole('button', { name: 'Notícias recentes' })).toBeInTheDocument();
+  });
 });

@@ -25,16 +25,25 @@ export function connectionText(ui: UiState, hidden: ReadonlySet<string> = new Se
   return { label: available.length ? `${all.length}/${available.length} fontes` : 'conectado', tone: 'ok' };
 }
 
-export function StatusBar({ ui, prefs, store, hiddenSources }: { ui: UiState; prefs: Prefs; store: SandStore; hiddenSources?: string[] }) {
+export function StatusBar({ ui, prefs, store, hiddenSources, research }: { ui: UiState; prefs: Prefs; store: SandStore; hiddenSources?: string[]; research?: boolean }) {
   const conn = connectionText(ui, new Set(hiddenSources));
   const total = store.events.size;
   return (
     <footer className="statusbar" aria-live="polite">
-      <span>
-        {ui.sessionCount} {ui.sessionCount === 1 ? 'evento' : 'eventos'} nesta sessão
-        {total ? ` · ${total} nas últimas ${prefs.windowHours} h` : ''}
-      </span>
-      <span>último às {formatClock(ui.lastReceivedAt ?? ui.status?.lastEventAt)}</span>
+      {research ? (
+        <>
+          <span>{total} {total === 1 ? 'pesquisa' : 'pesquisas'} dos últimos 30 dias</span>
+          <span>coletadas às {formatClock(ui.status?.lastEventAt)}</span>
+        </>
+      ) : (
+        <>
+          <span>
+            {ui.sessionCount} {ui.sessionCount === 1 ? 'evento' : 'eventos'} nesta sessão
+            {total ? ` · ${total} nas últimas ${prefs.windowHours} h` : ''}
+          </span>
+          <span>último às {formatClock(ui.lastReceivedAt ?? ui.status?.lastEventAt)}</span>
+        </>
+      )}
       {prefs.location && <span>{prefs.location.name}</span>}
       <span className={`statusbar__conn statusbar__conn--${conn.tone}`}>{conn.label}</span>
     </footer>

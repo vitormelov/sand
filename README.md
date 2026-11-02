@@ -39,6 +39,7 @@ Modo demonstração, com dados **fictícios** e o rótulo "DEMO — dados fictí
 | `npm run dev` | interface (Vite) + `/api/geocode` local |
 | `npm run dev:lan` | igual, mas acessível por outros aparelhos da rede (ex.: celular em `http://<IP-do-PC>:5173`) |
 | `npm run ingest` | uma passada de coleta: lê o estado do Firestore, consulta as fontes vencidas, grava de volta (é o que o GitHub Actions roda a cada ~5 min) |
+| `npm run ingest:research` | SAND Conhecimento: busca as pesquisas dos últimos 30 dias no OpenAlex e grava em `research/*` (o GitHub Actions roda a cada 6 h) |
 | `npm run build` | typecheck + bundle de produção em `dist/` |
 | `npm run build:vercel` | build da Vercel (`.vercel/output`: site estático + função de busca de cidade) |
 | `npm run deploy:rules` | publica `firestore.rules` no projeto Firebase |
@@ -74,6 +75,15 @@ O SAND é focado no Brasil. Verificação feita em 24/10/2026 com `npm run verif
 | Desligadas por padrão | BBC World e Guardian (`ENABLE_INTERNATIONAL=1`), GDELT (`GDELT_ENABLED=1`), NewsAPI (`NEWSAPI_KEY`) |
 
 O SAND guarda e mostra apenas título, um resumo curto e o link para a matéria original. Não raspa páginas e não contorna login, paywall ou proteção anti-robô. Respeita `ETag`/`Last-Modified`, `Retry-After` e recua exponencialmente em falhas. Cada pessoa liga ou desliga fontes em Configurações → Fontes de notícias.
+
+## SAND Conhecimento
+
+O site tem duas vertentes, trocadas pelo seletor **Notícias | Conhecimento** no topo. Em Conhecimento, cada grão é uma **pesquisa científica publicada nos últimos 30 dias**, do mundo todo, vinda do [OpenAlex](https://openalex.org) (dados abertos, CC0).
+
+- **Coleta** (`.github/workflows/research.yml`, a cada 6 h): para cada uma das 26 áreas do OpenAlex, os artigos e revisões mais citados do período, com resumo; ficam até 18 por área (~470 no total). Artigos antigos que o OpenAlex "re-datou" para este mês (citados dois ou mais anos antes da data de publicação) são descartados. Uma consulta extra traz o impacto das revistas. São ~30 requisições por passada.
+- **Tamanho do grão**: 60% relevância para você (o mesmo motor das notícias: seus interesses, seu país, consequências práticas) e 40% peso científico (impacto da revista e citações, em escala logarítmica). O painel de detalhes mostra as duas partes.
+- **Envelhecimento**: o grão clareia ao longo dos 30 dias, como a notícia em 48 h.
+- **Sem chave**, o OpenAlex divide uma cota diária gratuita entre todos no mesmo endereço IP (no GitHub Actions, muita gente). Uma chave gratuita (https://openalex.org/settings/api) no secret `OPENALEX_API_KEY` dá cota própria.
 
 ## Como funciona
 
@@ -123,7 +133,7 @@ Verificações manuais feitas no navegador (Chromium do app, 401×682 e produç�
 
 1. **Firebase** ([console](https://console.firebase.google.com)): crie um projeto; em *Authentication → Sign-in method*, ative **E-mail/senha**; crie o **Firestore** (região `southamerica-east1`); em *Configurações do projeto → Seus apps*, registre um app Web e copie a configuração (`apiKey`, `authDomain`, `projectId`, `appId`); em *Contas de serviço*, gere uma **chave privada** (arquivo JSON).
 2. **Regras do Firestore**: `npx firebase login`, `npx firebase use --add` (escolha o projeto) e `npm run deploy:rules`.
-3. **GitHub** (Settings → Secrets and variables → Actions): secret `FIREBASE_SERVICE_ACCOUNT` com o conteúdo do JSON. Em *Actions → Ingest news → Run workflow* rode uma vez para preencher o Firestore; depois ele roda sozinho a cada ~5 min.
+3. **GitHub** (Settings → Secrets and variables → Actions): secret `FIREBASE_SERVICE_ACCOUNT` com o conteúdo do JSON (e, opcional, `OPENALEX_API_KEY`). Em *Actions → Ingest news → Run workflow* e *Actions → Ingest research → Run workflow* rode uma vez cada para preencher o Firestore; depois elas rodam sozinhas (notícias a cada ~5 min, pesquisas a cada 6 h).
 4. **Vercel**: importe o repositório (o build usa `vercel.json` → `npm run build:vercel`) e defina `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID` e `VITE_FIREBASE_APP_ID`.
 5. **Firebase → Authentication → Settings → Authorized domains**: adicione o domínio da Vercel (ex.: `sand.vercel.app`).
 

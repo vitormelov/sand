@@ -1,0 +1,29 @@
+# SAND Conhecimento: fetches recent research from OpenAlex and updates Firestore.
+# Every 6 hours is plenty: OpenAlex updates daily and a pass covers the last 30 days.
+name: Ingest research
+
+on:
+  schedule:
+    - cron: '23 */6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ingest-research
+  cancel-in-progress: false
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run ingest:research
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          # Optional: a free OpenAlex key (own daily budget instead of the shared one).
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}

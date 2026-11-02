@@ -14,7 +14,7 @@ interface Props {
 }
 
 /** On-demand list: the keyboard-accessible way to reach every grain. */
-export function RecentList({ store, ui, viewed, savedIds, onOpen, onClose }: Props) {
+export function RecentList({ store, ui, viewed, savedIds, onOpen, onClose, title = 'Notícias recentes' }: Props & { title?: string }) {
   const [order, setOrder] = useState<'time' | 'impact'>('time');
   const headRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => headRef.current?.focus(), []);
@@ -36,7 +36,7 @@ export function RecentList({ store, ui, viewed, savedIds, onOpen, onClose }: Pro
     <aside className="sheet" role="dialog" aria-modal="false" aria-labelledby="recent-title">
       <div className="sheet__head">
         <h2 id="recent-title" ref={headRef} tabIndex={-1}>
-          Notícias recentes
+          {title}
         </h2>
         <button className="icon-btn" onClick={onClose} aria-label="Fechar lista">
           <IconClose />

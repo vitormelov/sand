@@ -1,0 +1,1270 @@
+{
+ "results": [
+  {
+   "id": "https://openalex.org/W2471708756",
+   "doi": "https://doi.org/10.37527/2016.66.2.001",
+   "title": "Review: dietary phenolic compounds, health benefits and bioaccessibility",
+   "publication_date": "2026-10-16",
+   "publication_year": 2026,
+   "language": "en",
+   "cited_by_count": 133,
+   "fwci": 0,
+   "counts_by_year": [
+    {
+     "year": 2025,
+     "cited_by_count": 8
+    },
+    {
+     "year": 2024,
+     "cited_by_count": 16
+    },
+    {
+     "year": 2023,
+     "cited_by_count": 9
+    },
+    {
+     "year": 2022,
+     "cited_by_count": 24
+    },
+    {
+     "year": 2021,
+     "cited_by_count": 23
+    },
+    {
+     "year": 2020,
+     "cited_by_count": 23
+    },
+    {
+     "year": 2019,
+     "cited_by_count": 16
+    },
+    {
+     "year": 2018,
+     "cited_by_count": 5
+    },
+    {
+     "year": 2017,
+     "cited_by_count": 7
+    }
+   ],
+   "abstract_inverted_index": {
+    "Phenolic": [
+     0,
+     24
+    ],
+    "compounds": [
+     1,
+     25,
+     44,
+     60
+    ],
+    "are": [
+     2,
+     15,
+     26
+    ],
+    "ubiquitous": [
+     3
+    ],
+    "in": [
+     4,
+     21,
+     33,
+     49
+    ],
+    "plant-based": [
+     5
+    ],
+    "foods.": [
+     6
+    ],
+    "High": [
+     7
+    ],
+    "dietary": [
+     8
+    ],
+    "intake": [
+     9
+    ],
+    "of": [
+     10,
+     42,
+     56,
+     58,
+     74,
+     80,
+     85
+    ],
+    "fruits,": [
+     11
+    ],
+    "vegetables": [
+     12
+    ],
+    "and": [
+     13,
+     82
+    ],
+    "cereals": [
+     14
+    ],
+    "related": [
+     16
+    ],
+    "to": [
+     17,
+     28,
+     69
+    ],
+    "a": [
+     18,
+     53,
+     71
+    ],
+    "decreased": [
+     19
+    ],
+    "rate": [
+     20
+    ],
+    "chronic": [
+     22
+    ],
+    "diseases.": [
+     23
+    ],
+    "thought": [
+     27
+    ],
+    "be": [
+     29
+    ],
+    "responsible,": [
+     30
+    ],
+    "at": [
+     31
+    ],
+    "least": [
+     32
+    ],
+    "part,": [
+     34
+    ],
+    "for": [
+     35
+    ],
+    "those": [
+     36
+    ],
+    "health": [
+     37,
+     77
+    ],
+    "effects.": [
+     38
+    ],
+    "No-netheless,": [
+     39
+    ],
+    "the": [
+     40,
+     75,
+     83,
+     87
+    ],
+    "bioaccessibility": [
+     41
+    ],
+    "phenolic": [
+     43,
+     59
+    ],
+    "is": [
+     45,
+     61
+    ],
+    "not": [
+     46,
+     62
+    ],
+    "often": [
+     47
+    ],
+    "considered": [
+     48
+    ],
+    "these": [
+     50
+    ],
+    "studies;": [
+     51
+    ],
+    "thus,": [
+     52
+    ],
+    "precise": [
+     54
+    ],
+    "mechanism": [
+     55
+    ],
+    "action": [
+     57
+    ],
+    "known.": [
+     63
+    ],
+    "In": [
+     64
+    ],
+    "this": [
+     65
+    ],
+    "review,": [
+     66
+    ],
+    "we": [
+     67
+    ],
+    "aim": [
+     68
+    ],
+    "present": [
+     70
+    ],
+    "comprehensive": [
+     72
+    ],
+    "knowledge": [
+     73
+    ],
+    "potential": [
+     76
+    ],
+    "promotion": [
+     78
+    ],
+    "effects": [
+     79
+    ],
+    "polyphenols": [
+     81
+    ],
+    "importance": [
+     84
+    ],
+    "considering": [
+     86
+    ],
+    "factors": [
+     88
+    ],
+    "that": [
+     89
+    ],
+    "affect": [
+     90
+    ],
+    "their": [
+     91
+    ],
+    "bioavailability": [
+     92
+    ],
+    "on": [
+     93
+    ],
+    "research": [
+     94
+    ],
+    "projects.": [
+     95
+    ]
+   },
+   "primary_location": {
+    "landing_page_url": "https://doi.org/10.37527/2016.66.2.001",
+    "source": {
+     "id": "https://openalex.org/S62923122",
+     "display_name": "Archivos Latinoamericanos de Nutrición",
+     "is_core": false
+    }
+   },
+   "primary_topic": {
+    "display_name": "Phytochemicals and Antioxidant Activities",
+    "field": {
+     "id": "https://openalex.org/fields/27",
+     "display_name": "Medicine"
+    },
+    "subfield": {
+     "display_name": "Biochemistry"
+    }
+   },
+   "authorships": [
+    {
+     "author": {
+      "display_name": "Erick Paul Gutiérrez‐Grijalva"
+     },
+     "countries": [
+      "MX"
+     ]
+    },
+    {
+     "author": {
+      "display_name": "Dulce Libna Ambriz-Pérez"
+     },
+     "countries": [
+      "MX"
+     ]
+    },
+    {
+     "author": {
+      "display_name": "Nayely Leyva‐López"
+     },
+     "countries": [
+      "MX"
+     ]
+    }
+   ],
+   "open_access": {
+    "is_oa": true,
+    "oa_status": "gold",
+    "oa_url": "https://doi.org/10.37527/2016.66.2.001",
+    "any_repository_has_fulltext": false
+   }
+  },
+  {
+   "id": "https://openalex.org/W4417175683",
+   "doi": "https://doi.org/10.1126/science.aeh7930",
+   "title": "Sequential diagnosis with language models",
+   "publication_date": "2026-10-22",
+   "publication_year": 2026,
+   "language": "en",
+   "cited_by_count": 27,
+   "fwci": 41.0306,
+   "counts_by_year": [
+    {
+     "year": 2026,
+     "cited_by_count": 21
+    },
+    {
+     "year": 2025,
+     "cited_by_count": 6
+    }
+   ],
+   "abstract_inverted_index": {
+    "We": [
+     0,
+     43
+    ],
+    "explored": [
+     1
+    ],
+    "the": [
+     2,
+     16,
+     62,
+     72,
+     112
+    ],
+    "capabilities": [
+     3
+    ],
+    "of": [
+     4,
+     19,
+     37,
+     58,
+     81,
+     114
+    ],
+    "frontier": [
+     5
+    ],
+    "language": [
+     6,
+     115
+    ],
+    "models": [
+     7,
+     116
+    ],
+    "in": [
+     8,
+     105
+    ],
+    "sequential": [
+     9
+    ],
+    "diagnosis,": [
+     10,
+     34
+    ],
+    "a": [
+     11,
+     23,
+     33,
+     56,
+     106
+    ],
+    "diagnostic": [
+     12,
+     38
+    ],
+    "paradigm": [
+     13
+    ],
+    "that": [
+     14,
+     54
+    ],
+    "captures": [
+     15
+    ],
+    "iterative": [
+     17
+    ],
+    "nature": [
+     18
+    ],
+    "clinical": [
+     20,
+     25
+    ],
+    "reasoning.": [
+     21
+    ],
+    "Given": [
+     22
+    ],
+    "brief": [
+     24
+    ],
+    "presentation,": [
+     26
+    ],
+    "clinicians": [
+     27
+    ],
+    "selectively": [
+     28
+    ],
+    "acquired": [
+     29
+    ],
+    "information": [
+     30
+    ],
+    "to": [
+     31
+    ],
+    "reach": [
+     32
+    ],
+    "enabling": [
+     35
+    ],
+    "assessment": [
+     36
+    ],
+    "accuracy": [
+     39,
+     76
+    ],
+    "and": [
+     40,
+     48,
+     65,
+     86,
+     97
+    ],
+    "workup": [
+     41
+    ],
+    "cost.": [
+     42
+    ],
+    "developed": [
+     44
+    ],
+    "an": [
+     45,
+     49
+    ],
+    "interactive": [
+     46
+    ],
+    "benchmark": [
+     47,
+     108
+    ],
+    "artificial": [
+     50
+    ],
+    "intelligence": [
+     51
+    ],
+    "(AI)": [
+     52
+    ],
+    "system": [
+     53,
+     73
+    ],
+    "simulates": [
+     55
+    ],
+    "panel": [
+     57
+    ],
+    "physicians,": [
+     59
+    ],
+    "continually": [
+     60
+    ],
+    "revising": [
+     61
+    ],
+    "differential": [
+     63
+    ],
+    "diagnosis": [
+     64
+    ],
+    "selecting": [
+     66
+    ],
+    "cost-effective": [
+     67
+    ],
+    "tests.": [
+     68
+    ],
+    "Using": [
+     69
+    ],
+    "this": [
+     70
+    ],
+    "benchmark,": [
+     71
+    ],
+    "achieved": [
+     74
+    ],
+    "83.2%": [
+     75
+    ],
+    "on": [
+     77,
+     88
+    ],
+    "New": [
+     78
+    ],
+    "England": [
+     79
+    ],
+    "Journal": [
+     80
+    ],
+    "Medicine": [
+     82
+    ],
+    "clinicopathological": [
+     83
+    ],
+    "conference": [
+     84
+    ],
+    "cases": [
+     85
+    ],
+    "80.3%": [
+     87
+    ],
+    "MIMIC-IV-ED": [
+     89
+    ],
+    "emergency": [
+     90
+    ],
+    "department": [
+     91
+    ],
+    "admissions,": [
+     92
+    ],
+    "outperforming": [
+     93
+    ],
+    "generalist": [
+     94
+    ],
+    "physicians": [
+     95
+    ],
+    "(36.1": [
+     96
+    ],
+    "46.8%,": [
+     98
+    ],
+    "respectively).": [
+     99
+    ],
+    "Although": [
+     100
+    ],
+    "these": [
+     101
+    ],
+    "findings": [
+     102
+    ],
+    "were": [
+     103
+    ],
+    "obtained": [
+     104
+    ],
+    "controlled": [
+     107
+    ],
+    "setting,": [
+     109
+    ],
+    "they": [
+     110
+    ],
+    "highlight": [
+     111
+    ],
+    "promise": [
+     113
+    ],
+    "for": [
+     117
+    ],
+    "supporting": [
+     118
+    ],
+    "more": [
+     119
+    ],
+    "accurate,": [
+     120
+    ],
+    "lower-cost": [
+     121
+    ],
+    "diagnoses.": [
+     122
+    ]
+   },
+   "primary_location": {
+    "landing_page_url": "https://doi.org/10.1126/science.aeh7930",
+    "source": {
+     "id": "https://openalex.org/S3880285",
+     "display_name": "Science",
+     "is_core": true
+    }
+   },
+   "primary_topic": {
+    "display_name": "Artificial Intelligence in Healthcare and Education",
+    "field": {
+     "id": "https://openalex.org/fields/27",
+     "display_name": "Medicine"
+    },
+    "subfield": {
+     "display_name": "Health Informatics"
+    }
+   },
+   "authorships": [
+    {
+     "author": {
+      "display_name": "Harsha Nori"
+     },
+     "countries": [
+      "US"
+     ]
+    },
+    {
+     "author": {
+      "display_name": "Mayank Daswani"
+     },
+     "countries": [
+      "US"
+     ]
+    },
+    {
+     "author": {
+      "display_name": "Christopher Kelly"
+     },
+     "countries": [
+      "US"
+     ]
+    }
+   ],
+   "open_access": {
+    "is_oa": true,
+    "oa_status": "green",
+    "oa_url": "https://arxiv.org/pdf/2506.22405",
+    "any_repository_has_fulltext": true
+   }
+  },
+  {
+   "id": "https://openalex.org/W2466828890",
+   "doi": "https://doi.org/10.37527/2016.66.1.008",
+   "title": "Evaluation of extracts from potato and tomato wastes as natural antioxidant additives",
+   "publication_date": "2026-10-15",
+   "publication_year": 2026,
+   "language": "en",
+   "cited_by_count": 19,
+   "fwci": 0,
+   "counts_by_year": [
+    {
+     "year": 2024,
+     "cited_by_count": 2
+    },
+    {
+     "year": 2023,
+     "cited_by_count": 2
+    },
+    {
+     "year": 2022,
+     "cited_by_count": 4
+    },
+    {
+     "year": 2021,
+     "cited_by_count": 4
+    },
+    {
+     "year": 2019,
+     "cited_by_count": 4
+    },
+    {
+     "year": 2018,
+     "cited_by_count": 1
+    },
+    {
+     "year": 2017,
+     "cited_by_count": 2
+    }
+   ],
+   "abstract_inverted_index": {
+    "65": [
+     172
+    ],
+    "72": [
+     166
+    ],
+    "144": [
+     168
+    ],
+    "400": [
+     139
+    ],
+    "The": [
+     0,
+     63,
+     107,
+     122,
+     174,
+     189
+    ],
+    "industrialization": [
+     1
+    ],
+    "of": [
+     2,
+     9,
+     31,
+     58,
+     81,
+     92,
+     102,
+     125,
+     132,
+     176,
+     195,
+     210
+    ],
+    "potato": [
+     3,
+     34,
+     116,
+     133,
+     182,
+     196
+    ],
+    "and": [
+     4,
+     28,
+     35,
+     50,
+     61,
+     66,
+     70,
+     78,
+     134,
+     138,
+     162,
+     167,
+     197
+    ],
+    "tomato": [
+     5,
+     36,
+     51,
+     135,
+     187,
+     198
+    ],
+    "produces": [
+     6
+    ],
+    "large": [
+     7
+    ],
+    "amount": [
+     8
+    ],
+    "wastes.": [
+     10
+    ],
+    "Previous": [
+     11
+    ],
+    "studies": [
+     12
+    ],
+    "have": [
+     13
+    ],
+    "demonstrated": [
+     14
+    ],
+    "that": [
+     15,
+     192
+    ],
+    "these": [
+     16
+    ],
+    "by-products": [
+     17,
+     37
+    ],
+    "are": [
+     18
+    ],
+    "rich": [
+     19
+    ],
+    "in": [
+     20,
+     40,
+     75,
+     99,
+     104,
+     207
+    ],
+    "antioxidant": [
+     21,
+     29,
+     64,
+     109,
+     144,
+     177,
+     205
+    ],
+    "compounds.": [
+     22
+    ],
+    "In": [
+     23
+    ],
+    "this": [
+     24
+    ],
+    "study,": [
+     25
+    ],
+    "the": [
+     26,
+     82,
+     86,
+     90,
+     97,
+     100,
+     142,
+     208
+    ],
+    "composition": [
+     27
+    ],
+    "efficacy": [
+     30,
+     178
+    ],
+    "extracts": [
+     32,
+     80,
+     131,
+     194
+    ],
+    "from": [
+     33
+    ],
+    "were": [
+     38,
+     73,
+     118
+    ],
+    "determined": [
+     39,
+     74
+    ],
+    "order": [
+     41,
+     175
+    ],
+    "to": [
+     42,
+     54,
+     149
+    ],
+    "evaluate": [
+     43
+    ],
+    "their": [
+     44,
+     157
+    ],
+    "potential": [
+     45
+    ],
+    "as": [
+     46,
+     180,
+     203
+    ],
+    "food": [
+     47
+    ],
+    "additives.": [
+     48
+    ],
+    "Potato": [
+     49
+    ],
+    "wastes": [
+     52,
+     136
+    ],
+    "showed": [
+     53,
+     191
+    ],
+    "be": [
+     55,
+     201
+    ],
+    "good": [
+     56
+    ],
+    "sources": [
+     57
+    ],
+    "fiber,": [
+     59
+    ],
+    "protein": [
+     60
+    ],
+    "antioxidants.": [
+     62
+    ],
+    "activity": [
+     65,
+     110
+    ],
+    "total": [
+     67
+    ],
+    "phenolic,": [
+     68
+    ],
+    "carotenoid": [
+     69
+    ],
+    "lycopene": [
+     71
+    ],
+    "contents": [
+     72
+    ],
+    "methanol,": [
+     76
+    ],
+    "ethanol": [
+     77,
+     130,
+     193
+    ],
+    "acetone": [
+     79,
+     95
+    ],
+    "residues.": [
+     83,
+     106,
+     188
+    ],
+    "Methanol": [
+     84
+    ],
+    "was": [
+     85,
+     96,
+     153,
+     179
+    ],
+    "best": [
+     87,
+     98
+    ],
+    "solvent": [
+     88
+    ],
+    "for": [
+     89
+    ],
+    "extraction": [
+     91,
+     101
+    ],
+    "phenolics": [
+     93
+    ],
+    "while": [
+     94
+    ],
+    "carotenoids": [
+     103
+    ],
+    "both": [
+     105
+    ],
+    "greatest": [
+     108
+    ],
+    "(14.10": [
+     111
+    ],
+    "μmol": [
+     112
+    ],
+    "Trolox/g)": [
+     113
+    ],
+    "resulted": [
+     114
+    ],
+    "when": [
+     115
+    ],
+    "peels": [
+     117,
+     183
+    ],
+    "extracted": [
+     119
+    ],
+    "with": [
+     120
+    ],
+    "ethanol.": [
+     121
+    ],
+    "oxidative": [
+     123
+    ],
+    "stability": [
+     124
+    ],
+    "canola": [
+     126
+    ],
+    "oil": [
+     127,
+     150
+    ],
+    "containing": [
+     128
+    ],
+    "either": [
+     129
+    ],
+    "(200": [
+     137,
+     146
+    ],
+    "mg/kg)": [
+     140
+    ],
+    "or": [
+     141
+    ],
+    "synthetic": [
+     143
+    ],
+    "BHT": [
+     145,
+     185
+    ],
+    "mg/kg),": [
+     147
+    ],
+    "compared": [
+     148
+    ],
+    "without": [
+     151
+    ],
+    "antioxidants,": [
+     152
+    ],
+    "evaluated": [
+     154
+    ],
+    "by": [
+     155
+    ],
+    "measuring": [
+     156
+    ],
+    "peroxide": [
+     158
+    ],
+    "values,": [
+     159
+    ],
+    "conjugated": [
+     160
+    ],
+    "dienes": [
+     161
+    ],
+    "p-anisidine": [
+     163
+    ],
+    "value": [
+     164
+    ],
+    "after": [
+     165
+    ],
+    "h": [
+     169
+    ],
+    "storage": [
+     170
+    ],
+    "at": [
+     171
+    ],
+    "°C.": [
+     173
+    ],
+    "follows:": [
+     181
+    ],
+    ">": [
+     184,
+     186
+    ],
+    "results": [
+     190
+    ],
+    "waste": [
+     199
+    ],
+    "could": [
+     200
+    ],
+    "used": [
+     202
+    ],
+    "natural": [
+     204
+    ],
+    "additives": [
+     206
+    ],
+    "protection": [
+     209
+    ],
+    "vegetable": [
+     211
+    ],
+    "oils.": [
+     212
+    ]
+   },
+   "primary_location": {
+    "landing_page_url": "https://doi.org/10.37527/2016.66.1.008",
+    "source": {
+     "id": "https://openalex.org/S62923122",
+     "display_name": "Archivos Latinoamericanos de Nutrición",
+     "is_core": false
+    }
+   },
+   "primary_topic": {
+    "display_name": "Phytochemicals and Antioxidant Activities",
+    "field": {
+     "id": "https://openalex.org/fields/27",
+     "display_name": "Medicine"
+    },
+    "subfield": {
+     "display_name": "Biochemistry"
+    }
+   },
+   "authorships": [
+    {
+     "author": {
+      "display_name": "María del Carmen Robles-Ramírez"
+     },
+     "countries": [
+      "MX"
+     ]
+    },
+    {
+     "author": {
+      "display_name": "Ricardo Monterrubio‐López"
+     },
+     "countries": [
+      "MX"
+     ]
+    },
+    {
+     "author": {
+      "display_name": "Rosalva Mora‐Escobedo"
+     },
+     "countries": [
+      "MX"
+     ]
+    }
+   ],
+   "open_access": {
+    "is_oa": true,
+    "oa_status": "gold",
+    "oa_url": "https://doi.org/10.37527/2016.66.1.008",
+    "any_repository_has_fulltext": true
+   }
+  }
+ ]
+}

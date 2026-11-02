@@ -97,6 +97,14 @@ Cada pessoa pode ligar ou desligar fontes em **Configurações → Fontes de not
 | GDELT | `gdelt` | `GDELT_ENABLED=1` (falhou repetidamente daqui com HTTP 429 e duplica os feeds) |
 | NewsAPI | `newsapi` | `NEWSAPI_KEY` |
 
+## SAND Conhecimento (pesquisas)
+
+| Fonte | id | Método |
+|---|---|---|
+| OpenAlex | `openalex` | API oficial `api.openalex.org/works` (dados CC0). Verificada em 31/10/2026: uma passada trouxe 463 pesquisas das 26 áreas em 31 requisições. Sem chave usa a cota gratuita compartilhada por IP; `OPENALEX_API_KEY` dá cota própria |
+
+Candidatas para somar depois: Semantic Scholar (resumo de uma frase e "citações influentes"), SciELO (pesquisa brasileira em português), medRxiv/bioRxiv e arXiv (pré-publicações), Europe PMC/PubMed (saúde), Crossref (metadados de DOI).
+
 ## Pendentes
 
 Fontes sugeridas que **não** foram integradas. Nenhuma aparece no site como se estivesse funcionando.

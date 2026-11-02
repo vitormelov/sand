@@ -1360,7 +1360,8 @@ button.btn {
 .demo-badge {
   top: calc(max(14px, env(safe-area-inset-top)) + 40px);
 }
-@media (max-width: 860px) {
+/* With the Notícias/Conhecimento switch the top row is fuller: the info line drops to a second row sooner. */
+@media (max-width: 1180px) {
   .statusbar {
     top: calc(max(14px, env(safe-area-inset-top)) + 32px);
     height: auto;
@@ -1417,4 +1418,42 @@ button.btn {
 }
 .source-group .toggle {
   margin-left: 12px;
+}
+
+/* ------------------------------------------- Notícias / Conhecimento switch */
+
+.mode-switch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+}
+.mode-switch button {
+  border: 0;
+  background: none;
+  padding: 4px 11px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+.mode-switch button.is-on {
+  background: var(--ink);
+  color: var(--paper);
+}
+.mode-switch button:focus-visible {
+  outline: 1.5px solid var(--ink);
+  outline-offset: 1px;
+}
+@media (max-width: 520px) {
+  /* Phones: the switch takes the clock's place. */
+  .topbar .brand--clock {
+    display: none;
+  }
+  .mode-switch button {
+    padding: 4px 9px;
+  }
 }

@@ -23,6 +23,12 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Research (SAND Conhecimento): day buckets + status, same rules as the news.
+    match /research/{doc} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
     // Ingestion state: the job only.
     match /ingest/{doc} {
       allow read, write: if false;
