@@ -186,6 +186,10 @@ export interface ResearchInfo {
   /** 0..1 — scientific weight combining journal and citations; part of the grain size. */
   weight: number;
   field?: string;
+  /** OpenAlex field id (11–36): what the questionnaire's themes group. */
+  fieldId?: number;
+  /** Article, or review (a summary of what is known on a subject). */
+  type?: 'article' | 'review';
   topic?: string;
   /** "First author et al." */
   authors?: string;

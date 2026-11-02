@@ -9,6 +9,7 @@ import { LeaderLine } from './components/LeaderLine';
 import { IconBookmark, IconList, IconSettings } from './components/icons';
 import { SavedList } from './components/SavedList';
 import { Questionnaire } from './components/Questionnaire';
+import { ResearchQuestionnaire } from './components/ResearchQuestionnaire';
 import { markViewed, saveItem, saveProfile, unsaveItem } from './services/account';
 import { ParticleCanvas, type GrainRef } from './components/ParticleCanvas';
 import { WorldMap } from './components/WorldMap';
@@ -93,6 +94,9 @@ export function App({
   const [prefs, setPrefs] = useState<Prefs>(loadPrefs);
   const [profile, setProfile] = useState<StoredProfile>(() => account?.profile ?? localProfile(loadPrefs()));
   const [questionnaire, setQuestionnaire] = useState(!!account && !account.profile.onboarded);
+  // SAND Conhecimento has its own questions: asked the first time someone opens it.
+  const [researchQuestions, setResearchQuestions] = useState(false);
+  const [researchQuestionsDismissed, setResearchQuestionsDismissed] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
   /** Profile changes are saved to the account (debounced) or, without one, to this browser. */
   const updateProfile = useCallback(
@@ -456,6 +460,10 @@ export function App({
             setPanel('none');
             setQuestionnaire(true);
           }}
+          onEditResearch={() => {
+            setPanel('none');
+            setResearchQuestions(true);
+          }}
           onChange={update}
           onClose={() => setPanel('none')}
           onPrivacy={() => setPrivacy(true)}
@@ -484,6 +492,22 @@ export function App({
           onCancel={profile.onboarded ? () => setQuestionnaire(false) : undefined}
           onDone={(p) => {
             setQuestionnaire(false);
+            clearTimeout(saveTimer.current);
+            setProfile(p);
+            void saveProfile(p).catch(() => undefined);
+          }}
+        />
+      )}
+
+      {account && !questionnaire && (researchQuestions || (research && !profile.research?.onboarded && !researchQuestionsDismissed)) && (
+        <ResearchQuestionnaire
+          initial={profile}
+          onCancel={() => {
+            setResearchQuestions(false);
+            setResearchQuestionsDismissed(true);
+          }}
+          onDone={(p) => {
+            setResearchQuestions(false);
             clearTimeout(saveTimer.current);
             setProfile(p);
             void saveProfile(p).catch(() => undefined);

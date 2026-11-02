@@ -1457,3 +1457,35 @@ button.btn {
     padding: 4px 9px;
   }
 }
+
+/* SAND Conhecimento questionnaire: one option per line, with its explanation. */
+.q-options {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+.q-option {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  padding: 12px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  cursor: pointer;
+}
+.q-option strong {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+}
+.q-option span {
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.q-option.is-on {
+  border-color: var(--ink);
+  background: var(--active);
+}

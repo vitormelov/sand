@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { IMPACT_BANDS } from '../../shared/impact/config';
 import { computeImpact, type ImpactResult } from '../../shared/impact/engine';
-import { researchImpact } from '../../shared/impact/research';
+import { researchImpact, researchVisible } from '../../shared/impact/research';
 import type { Category, NewsEvent, StreamEventMessage, StreamStatus, UserProfile } from '../../shared/types';
 
 export type Connection = 'connecting' | 'open' | 'reconnecting' | 'offline';
@@ -118,6 +118,8 @@ export class SandStore {
   isHidden(e: NewsEvent): boolean {
     if (!this.inWindow(e)) return true;
     if (this.hiddenCategories.has(mainCategory(e))) return true;
+    // SAND Conhecimento: the questionnaire's "não quero" and "só esses" answers.
+    if (e.research && !researchVisible(e, this.profile)) return true;
     if (!this.hiddenSources.size) return false;
     const ids = e.sourceIds?.length ? e.sourceIds : e.sources.map((n) => this.sourceIdByName.get(n)).filter((x): x is string => !!x);
     return ids.length > 0 && ids.every((id) => this.hiddenSources.has(id));
@@ -204,6 +206,8 @@ export class SandStore {
       const r = this.score(e);
       this.sink?.updateImpact(e.id, r.score, r.urgent || r.band === 'critical');
     }
+    // Research answers can take grains out of (or back into) the sand.
+    if ([...this.all.values()].some((e) => e.research)) this.refilter();
     this.set({});
   }
 

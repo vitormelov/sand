@@ -67,6 +67,7 @@ interface OpenAlexWork {
   title?: string | null;
   publication_date?: string;
   publication_year?: number;
+  type?: string;
   language?: string | null;
   cited_by_count?: number;
   fwci?: number | null;
@@ -79,7 +80,7 @@ interface OpenAlexWork {
 }
 
 const SELECT = [
-  'id', 'doi', 'title', 'publication_date', 'publication_year', 'language', 'cited_by_count', 'fwci', 'counts_by_year',
+  'id', 'doi', 'title', 'publication_date', 'publication_year', 'type', 'language', 'cited_by_count', 'fwci', 'counts_by_year',
   'abstract_inverted_index', 'primary_location', 'primary_topic', 'authorships', 'open_access',
 ].join(',');
 
@@ -168,6 +169,8 @@ export function mapWork(w: OpenAlexWork, journalImpact: Map<string, number>, now
     journalImpact: jImpact != null ? Math.round(jImpact * 10) / 10 : undefined,
     weight: scientificWeight(citations, fwci, jImpact),
     field: field?.name,
+    fieldId: field?.id,
+    type: w.type === 'review' ? 'review' : 'article',
     topic: toPlainText(w.primary_topic?.display_name, 120) || undefined,
     authors: authorsLabel(w),
     openAccess: w.open_access?.is_oa ?? undefined,
@@ -219,7 +222,17 @@ export interface ResearchPass {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** The whole pass: 26 field queries + one journal query per 50 journals. */
+/**
+ * Besides the world's most cited per field, research the questionnaire lets people prefer
+ * but that rarely makes a global top: Brazilian institutions, Portuguese and Spanish.
+ */
+export const EXTRA_QUERIES: { label: string; filter: string; keep: number }[] = [
+  { label: 'instituições brasileiras', filter: 'institutions.country_code:br', keep: 40 },
+  { label: 'em português', filter: 'language:pt', keep: 30 },
+  { label: 'em espanhol', filter: 'language:es', keep: 20 },
+];
+
+/** The whole pass: 26 field queries, 3 extra ones, and one journal query per 50 journals. */
 export async function fetchRecentResearch(opts: OpenAlexOptions = {}): Promise<ResearchPass> {
   const now = opts.now ?? Date.now();
   const signal = opts.signal ?? new AbortController().signal;
@@ -230,24 +243,28 @@ export async function fetchRecentResearch(opts: OpenAlexOptions = {}): Promise<R
   let lastError: string | undefined;
   let requests = 0;
   let consecutiveFailures = 0;
-  for (const f of FIELDS) {
+  const queries = [
+    ...FIELDS.map((f) => ({ key: f.id, filter: `primary_topic.field.id:${f.id}`, fetch: PER_FIELD_FETCH, keep: PER_FIELD_KEEP })),
+    ...EXTRA_QUERIES.map((q, i) => ({ key: 100 + i, filter: q.filter, fetch: Math.min(100, q.keep * 2), keep: q.keep })),
+  ];
+  for (const q of queries) {
     if (signal.aborted || consecutiveFailures >= 3) {
-      failedFields.push(f.id);
+      failedFields.push(q.key);
       continue;
     }
     const url = withAuth(
-      `${API}/works?filter=from_publication_date:${from},to_publication_date:${to},type:article|review,has_abstract:true,is_retracted:false,primary_topic.field.id:${f.id}` +
-        `&sort=cited_by_count:desc&per_page=${PER_FIELD_FETCH}&select=${SELECT}`,
+      `${API}/works?filter=from_publication_date:${from},to_publication_date:${to},type:article|review,has_abstract:true,is_retracted:false,${q.filter}` +
+        `&sort=cited_by_count:desc&per_page=${q.fetch}&select=${SELECT}`,
       opts,
     );
     try {
       requests++;
       const res = await httpGet(url, { signal, timeoutMs: 30_000, headers: { Accept: 'application/json' } });
       const list = ((JSON.parse(res.text) as { results?: OpenAlexWork[] }).results ?? []).filter((w) => !isRedated(w));
-      works.push(...list.slice(0, PER_FIELD_KEEP));
+      works.push(...list.slice(0, q.keep));
       consecutiveFailures = 0;
     } catch (err) {
-      failedFields.push(f.id);
+      failedFields.push(q.key);
       lastError = (err as Error).message.slice(0, 200);
       consecutiveFailures++;
     }

@@ -16,6 +16,8 @@ interface Props {
   account?: AccountProps;
   onProfileChange: (p: StoredProfile) => void;
   onEditAnswers: () => void;
+  /** SAND Conhecimento questions (themes, countries, languages...). */
+  onEditResearch?: () => void;
   onChange: (patch: Partial<Prefs>) => void;
   onClearAll: () => void;
   onClose: () => void;
@@ -231,7 +233,7 @@ function AccountSection({ account }: { account: AccountProps }) {
   );
 }
 
-export function SettingsPanel({ prefs, profile, sources, account, onProfileChange, onEditAnswers, onChange, onClearAll, onClose, onPrivacy }: Props) {
+export function SettingsPanel({ prefs, profile, sources, account, onProfileChange, onEditAnswers, onEditResearch, onChange, onClearAll, onClose, onPrivacy }: Props) {
   const [editingCity, setEditingCity] = useState(!profile.location);
   const [confirmClear, setConfirmClear] = useState(false);
   const headRef = useRef<HTMLHeadingElement>(null);
@@ -281,6 +283,11 @@ export function SettingsPanel({ prefs, profile, sources, account, onProfileChang
         {account && (
           <button className="link-btn" onClick={onEditAnswers}>
             Refazer as perguntas (interesses, futebol, rotina, trabalho, lugares)
+          </button>
+        )}
+        {account && onEditResearch && (
+          <button className="link-btn" onClick={onEditResearch}>
+            Refazer as perguntas do Conhecimento (áreas, países, idiomas, tamanho)
           </button>
         )}
         <p className="hint">

@@ -1,3 +1,4 @@
+import { sanitizeResearchPrefs, type ResearchPrefs } from './research';
 import { CATEGORIES, type Category, type UserLocation, type UserProfile } from './types';
 
 /**
@@ -30,6 +31,8 @@ export interface ProfileAnswers {
   avoidTopics?: AvoidTopic[];
   /** News sources (connector ids) the user switched off. */
   hiddenSources?: string[];
+  /** SAND Conhecimento questionnaire. */
+  research?: ResearchPrefs;
 }
 
 export interface StoredProfile extends UserProfile, ProfileAnswers {
@@ -162,6 +165,7 @@ export function sanitizeProfile(raw: unknown): StoredProfile {
     hiddenSources: Array.isArray(r.hiddenSources)
       ? [...new Set(r.hiddenSources.filter((s: unknown): s is string => typeof s === 'string' && /^[a-z0-9-]{1,40}$/.test(s)))].slice(0, 50)
       : undefined,
+    research: sanitizeResearchPrefs(r.research),
     avoidTopics: Array.isArray(r.avoidTopics) ? [...new Set(r.avoidTopics.filter((t: unknown) => oneOf(t, AVOID_TOPICS)))] as AvoidTopic[] : undefined,
   };
 }
